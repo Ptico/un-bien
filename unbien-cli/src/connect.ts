@@ -372,67 +372,70 @@ function paintWidgets(): void {
 /** Wire the SessionClient event surface — called on whichever client the
  *  multi-relay picker promoted (single-relay: the original, called once). */
 function wireClient(c: SessionClient): void {
-c.on("envelope", (env) => {
-  const kind = env.rpc ? "rpc" : env.evt ? "evt" : "ub"
-  const inner = (env.rpc ?? env.evt ?? env.ub) as { type?: string } | undefined
-  trace("in", `${kind} ${inner?.type ?? "?"}`)
-  if (env.ub && inner?.type === "session_sync_end") closeSyncWindow()
-  // Panels are ephemeral view state, not transcript.
-  if (panels.apply(env)) {
-    paintWidgets()
-    return
-  }
-  const rpc = env.rpc as Record<string, unknown> | undefined
-  if (rpc?.type === "extension_ui_request") handleUiRequest(rpc)
-  if (rpc) applyStreaming(rpc)
-  seen.push(env)
-  if (!rpc || TRANSCRIPT_FRAMES.has(String(rpc.type))) draw()
-  // Busy state comes from the turn lifecycle; the running tool's name makes the
-  // indicator say what it is waiting on rather than just that it is waiting.
-  if (rpc?.type === "turn_start" || rpc?.type === "agent_start") {
-    shell?.setStatus({ working: true, activity: "thinking" })
-  } else if (rpc?.type === "tool_execution_start") {
-    shell?.setStatus({
-      working: true,
-      activity: String(rpc.toolName ?? "tool"),
-    })
-  } else if (rpc?.type === "tool_execution_end") {
-    shell?.setStatus({ working: true, activity: "thinking" })
-  } else if (
-    rpc?.type === "turn_end" ||
-    rpc?.type === "agent_end" ||
-    rpc?.type === "agent_settled"
-  ) {
-    shell?.setStatus({ working: false, activity: undefined })
-  }
-})
+  c.on("envelope", (env) => {
+    const kind = env.rpc ? "rpc" : env.evt ? "evt" : "ub"
+    const inner = (env.rpc ?? env.evt ?? env.ub) as
+      { type?: string } | undefined
+    trace("in", `${kind} ${inner?.type ?? "?"}`)
+    if (env.ub && inner?.type === "session_sync_end") closeSyncWindow()
+    // Panels are ephemeral view state, not transcript.
+    if (panels.apply(env)) {
+      paintWidgets()
+      return
+    }
+    const rpc = env.rpc as Record<string, unknown> | undefined
+    if (rpc?.type === "extension_ui_request") handleUiRequest(rpc)
+    if (rpc) applyStreaming(rpc)
+    seen.push(env)
+    if (!rpc || TRANSCRIPT_FRAMES.has(String(rpc.type))) draw()
+    // Busy state comes from the turn lifecycle; the running tool's name makes the
+    // indicator say what it is waiting on rather than just that it is waiting.
+    if (rpc?.type === "turn_start" || rpc?.type === "agent_start") {
+      shell?.setStatus({ working: true, activity: "thinking" })
+    } else if (rpc?.type === "tool_execution_start") {
+      shell?.setStatus({
+        working: true,
+        activity: String(rpc.toolName ?? "tool"),
+      })
+    } else if (rpc?.type === "tool_execution_end") {
+      shell?.setStatus({ working: true, activity: "thinking" })
+    } else if (
+      rpc?.type === "turn_end" ||
+      rpc?.type === "agent_end" ||
+      rpc?.type === "agent_settled"
+    ) {
+      shell?.setStatus({ working: false, activity: undefined })
+    }
+  })
 
-client.on("relayControl", (frame) => {
-  trace("relay", String(frame.type ?? Object.keys(frame).join(",")))
-})
+  client.on("relayControl", (frame) => {
+    trace("relay", String(frame.type ?? Object.keys(frame).join(",")))
+  })
 
-client.on("control", (frame) => {
-  trace("in", `control ${String(frame.type)}`)
-  // session_sync replays pending asks on the STOCK path (`sender.send`), not
-  // the envelope, so they arrive here rather than as {rpc} frames.
-  if (frame.type === "extension_ui_request") {
-    handleUiRequest(frame)
-    return
-  }
-  if (frame.type === "pair_error") {
-    console.error(`[pair failed] ${String(frame.message ?? frame.code ?? "")}`)
+  client.on("control", (frame) => {
+    trace("in", `control ${String(frame.type)}`)
+    // session_sync replays pending asks on the STOCK path (`sender.send`), not
+    // the envelope, so they arrive here rather than as {rpc} frames.
+    if (frame.type === "extension_ui_request") {
+      handleUiRequest(frame)
+      return
+    }
+    if (frame.type === "pair_error") {
+      console.error(
+        `[pair failed] ${String(frame.message ?? frame.code ?? "")}`,
+      )
+      process.exit(1)
+    }
+    if (frame.type === "error" && frame.code === "unknown_peer") {
+      console.error("[not paired] run `/unbien pair` and pass the new invite.")
+      process.exit(1)
+    }
+  })
+
+  c.on("close", () => {
+    console.error("[relay] connection closed")
     process.exit(1)
-  }
-  if (frame.type === "error" && frame.code === "unknown_peer") {
-    console.error("[not paired] run `/unbien pair` and pass the new invite.")
-    process.exit(1)
-  }
-})
-
-c.on("close", () => {
-  console.error("[relay] connection closed")
-  process.exit(1)
-})
+  })
 }
 wireClient(client)
 
@@ -548,16 +551,26 @@ if (!chosen) process.exit(1)
 
 // MULTI-RELAY: promote the chosen relay's client, close the others.
 if (multiRelay && clientsByRelay) {
-  const promoted = chosen.relayUrl ? clientsByRelay.get(chosen.relayUrl) : undefined
+  const promoted = chosen.relayUrl
+    ? clientsByRelay.get(chosen.relayUrl)
+    : undefined
   for (const [url, c] of clientsByRelay) {
     if (url !== chosen.relayUrl) {
-      try { c.close() } catch { /* already down */ }
+      try {
+        c.close()
+      } catch {
+        /* already down */
+      }
     }
   }
   if (promoted) {
     // Adopt the promoted client wholesale: event listeners re-wired below
     // (the original client's listeners stay on the abandoned instance).
-    try { client.close() } catch { /* not connected */ }
+    try {
+      client.close()
+    } catch {
+      /* not connected */
+    }
     client = promoted
     wireClient(client)
   }
