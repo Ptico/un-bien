@@ -269,7 +269,12 @@ let client = new SessionClient(relayUrl, loadOrCreateIdentity(), invite)
 // Note: in the multi-relay path, the client's internals may be re-bound to
 // the chosen relay's connection after the session picker (see below).
 
-const width = process.stdout.columns ?? 100
+// WIDTH is LIVE: updated on terminal resize so text wrapping follows the
+// actual terminal, not the width at process start.
+let width = process.stdout.columns ?? 100
+process.stdout.on("resize", () => {
+  width = process.stdout.columns ?? 100
+})
 /** Frames seen so far; the transcript is re-reduced from the whole stream. */
 const seen: EnvelopeMessage[] = []
 const panels = new PanelStore()
@@ -292,11 +297,17 @@ function emit(lines: readonly string[]): void {
 // WINDOWED DRAW (the O(n) fix): renderTranscript + setTranscript were O(n)
 // per draw — for long sessions, every streaming delta re-rendered the entire
 // conversation. Two caps:
-//   1. ITEM WINDOW: only the last DRAW_ITEM_WINDOW items go to renderTranscript
+//   1. ITEM WINDOW: only the last ~4-screens of items go to renderTranscript
 //      (the TUI scrolls from the bottom; anything above ~10 screens is wasted)
 //   2. LINE CAP: the rendered lines are capped to DRAW_LINE_CAP for the TUI
 // The reduce is still O(n) but it's a cheap loop — the RENDER was the cost.
-const DRAW_ITEM_WINDOW = 80
+// Item window scales with terminal HEIGHT (flexible, not fixed): ~4 screens
+// of items is the useful tail. Re-derived on each draw so resize takes effect
+// immediately. Floor 20 (tiny terminals), ceiling 200 (huge ones).
+function drawItemWindow(): number {
+  const h = process.stdout.rows ?? 40
+  return Math.max(20, Math.min(200, h * 4))
+}
 const DRAW_LINE_CAP = 2_000
 let drawPending = false
 function draw(): void {
@@ -306,8 +317,9 @@ function draw(): void {
     drawPending = false
     const items = reduce(seen)
     // WINDOW: the TUI shows the bottom — older items are dead render cost
+    const itemWindow = drawItemWindow()
     const windowed =
-      items.length > DRAW_ITEM_WINDOW ? items.slice(-DRAW_ITEM_WINDOW) : items
+      items.length > itemWindow ? items.slice(-itemWindow) : items
     const lines = renderTranscript(windowed, width, cwd, !settings.showThinking)
     const capped =
       lines.length > DRAW_LINE_CAP ? lines.slice(-DRAW_LINE_CAP) : lines
@@ -846,7 +858,9 @@ async function submit(text: string): Promise<void> {
     }
     trace("out", `queue room=${client.room} chars=${queued.length}`)
     client.queue(queued)
-    emit([`  ⏳ queued: ${queued.slice(0, 60)}${queued.length > 60 ? "…" : ""}`])
+    emit([
+      `  ⏳ queued: ${queued.slice(0, 60)}${queued.length > 60 ? "…" : ""}`,
+    ])
     return
   }
 
