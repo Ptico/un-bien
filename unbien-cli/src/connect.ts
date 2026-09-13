@@ -128,7 +128,7 @@ const openAsks = new Map<string, AskPrompt>()
 let syncWindow: Set<string> | null = null
 let quitting = false
 function hardQuit(reason: string): void {
-  if (quitting) process.exit(130)
+  if (quitting) process.exit(130)  // double-interrupt: immediate (already quitting)
   quitting = true
   // Once the shell exists, pi owns the terminal — let its teardown run rather
   // than restoring stdin by hand (which loses the original raw-mode state).
@@ -142,7 +142,7 @@ function hardQuit(reason: string): void {
     /* stdin already torn down */
   }
   process.stderr.write(`\n[exit] ${reason}\n`)
-  process.exit(130)
+  Shell.exitAfterDrain(130)
 }
 process.on("SIGINT", () => hardQuit("interrupted"))
 process.on("SIGTERM", () => hardQuit("terminated"))
@@ -651,7 +651,7 @@ if (process.stdin.isTTY) {
       } catch {
         /* already down */
       }
-      process.exit(0)
+      Shell.exitAfterDrain(0)
     },
   )
   shell.start()

@@ -159,9 +159,28 @@ export class Shell {
     } catch {
       /* fall through to the watchdog rather than stranding the process */
     }
-    const watchdog = setTimeout(() => process.exit(130), 250)
+    const watchdog = setTimeout(() => Shell.exitAfterDrain(130), 250)
     watchdog.unref()
     this.onQuit()
+  }
+
+  /** EXIT AFTER STDOUT DRAINS (the Ctrl-C wedge fix): process.exit() is
+   *  immediate and can fire before the terminal-restoration escape sequences
+   *  (Kitty pop, raw-mode restore, cursor reposition — all synchronous
+   *  process.stdout.write() calls inside tui.stop()) have actually reached the
+   *  terminal. The terminal is left in whatever mid-teardown state the last
+   *  flushed byte happened to be in: raw mode on, no echo, Kitty protocol
+   *  active. This waits for the write buffer to drain (or a short watchdog)
+   *  before terminating. */
+  static exitAfterDrain(code: number): void {
+    if (process.stdout.writableLength === 0) {
+      process.exit(code)
+    }
+    process.stdout.once("drain", () => process.exit(code))
+    // Watchdog: a pipe or a loaded system can stall the drain — 100ms is
+    // more than enough for a few hundred bytes of escape sequences.
+    const bail = setTimeout(() => process.exit(code), 100)
+    bail.unref()
   }
 
   /**
