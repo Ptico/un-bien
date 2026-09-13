@@ -21,34 +21,34 @@ own.
 
 **Goals**
 
-+ Attach to a running Pi session (or launch a new one) through a **relay** and
+- Attach to a running Pi session (or launch a new one) through a **relay** and
   render its transcript in real time — streaming text, tool-call cards,
   interactive prompts.
-+ **Multiple relays** at once, sessions aggregated into one list.
-+ First-class UX: proper Markdown + syntax-highlighted code, nice theming
+- **Multiple relays** at once, sessions aggregated into one list.
+- First-class UX: proper Markdown + syntax-highlighted code, nice theming
   (match the terminal's tokyo-night).
-+ Native iOS. No cross-platform toolkit.
+- Native iOS. No cross-platform toolkit.
 
 **Non-goals**
 
-+ No multi-provider abstraction (paseo's Claude Code / Codex / OpenCode layer).
+- No multi-provider abstraction (paseo's Claude Code / Codex / OpenCode layer).
   This is pi-only. There is nothing to abstract.
-+ No embedded Python. The wire, crypto, keychain, and websocket work are all
+- No embedded Python. The wire, crypto, keychain, and websocket work are all
   native-Swift strengths; there is no Python to reuse.
-+ Not a session *host*. The Pi process + relay host the session; we are a client.
+- Not a session _host_. The Pi process + relay host the session; we are a client.
 
 ---
 
 ## 2. Scope decisions (the settled ground)
 
-| Decision | Rationale |
-| --- | --- |
-| **Native iOS (SwiftUI), no toolkit** | The security model is iOS-native by design — Owner-key in iOS Keychain, iCloud-synced; Ed25519 first-class in CryptoKit. A toolkit *adds* a bridge here; native removes one. |
-| **pi-only (drop multi-provider)** | Protocol is already pi-centric (`model_set`/`list_models` = pi's `ModelRegistry`). No abstraction to build. |
-| **Multiple relays** | The differentiator over both paseo (multi-provider, own daemon) and the upstream remote-pi app (single-relay, basic UI). Pure client composition — no protocol change. |
-| **Markdown: `gonzalezreal/swift-markdown-ui`** | CommonMark + GFM, SwiftUI-native, themeable, pluggable `CodeSyntaxHighlighter`. Apple's `AttributedString(markdown:)` is inline-only — insufficient. |
-| **Highlighting: `Highlightr`** | highlight.js under the hood → 180+ languages + themes. Agents emit arbitrary languages, so Splash (Swift-focused) is wrong; tree-sitter is a v2 quality pass. |
-| **Reference impl is MIT** | Reuse/reference freely; lift its test vectors to verify the Swift codec + handshake byte-for-byte. |
+| Decision                                       | Rationale                                                                                                                                                                    |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Native iOS (SwiftUI), no toolkit**           | The security model is iOS-native by design — Owner-key in iOS Keychain, iCloud-synced; Ed25519 first-class in CryptoKit. A toolkit _adds_ a bridge here; native removes one. |
+| **pi-only (drop multi-provider)**              | Protocol is already pi-centric (`model_set`/`list_models` = pi's `ModelRegistry`). No abstraction to build.                                                                  |
+| **Multiple relays**                            | The differentiator over both paseo (multi-provider, own daemon) and the upstream remote-pi app (single-relay, basic UI). Pure client composition — no protocol change.       |
+| **Markdown: `gonzalezreal/swift-markdown-ui`** | CommonMark + GFM, SwiftUI-native, themeable, pluggable `CodeSyntaxHighlighter`. Apple's `AttributedString(markdown:)` is inline-only — insufficient.                         |
+| **Highlighting: `Highlightr`**                 | highlight.js under the hood → 180+ languages + themes. Agents emit arbitrary languages, so Splash (Swift-focused) is wrong; tree-sitter is a v2 quality pass.                |
+| **Reference impl is MIT**                      | Reuse/reference freely; lift its test vectors to verify the Swift codec + handshake byte-for-byte.                                                                           |
 
 ---
 
@@ -87,36 +87,36 @@ verbatim; never parse/normalize. ACK statuses: `received | busy | denied | timeo
 
 ### App → Pi (ClientMessage) — control surface
 
-| type | fields |
-| --- | --- |
-| `pair_request` | `token, device_name` |
-| `user_message` | `text, images?` (`WireImage = {data: base64, mime}`) |
-| `approve_tool` | `tool_call_id, decision: "allow"｜"deny"` — **app is the permission surface** |
-| `cancel` | `target_id` |
-| `session_sync` | `limit?` → replays history |
-| `session_new` / `session_compact` | — |
-| `model_set` | `provider, model_id` |
-| `thinking_set` | `level` (`off｜minimal｜low｜medium｜high｜xhigh`) |
-| `list_models` | — |
-| `queued_message_set` / `queued_message_clear` | `text` / `target_id?` |
-| `ping` | — |
-| `extension_ui_response` | reply to an interactive prompt |
+| type                                          | fields                                                                        |
+| --------------------------------------------- | ----------------------------------------------------------------------------- |
+| `pair_request`                                | `token, device_name`                                                          |
+| `user_message`                                | `text, images?` (`WireImage = {data: base64, mime}`)                          |
+| `approve_tool`                                | `tool_call_id, decision: "allow"｜"deny"` — **app is the permission surface** |
+| `cancel`                                      | `target_id`                                                                   |
+| `session_sync`                                | `limit?` → replays history                                                    |
+| `session_new` / `session_compact`             | —                                                                             |
+| `model_set`                                   | `provider, model_id`                                                          |
+| `thinking_set`                                | `level` (`off｜minimal｜low｜medium｜high｜xhigh`)                            |
+| `list_models`                                 | —                                                                             |
+| `queued_message_set` / `queued_message_clear` | `text` / `target_id?`                                                         |
+| `ping`                                        | —                                                                             |
+| `extension_ui_response`                       | reply to an interactive prompt                                                |
 
 ### Pi → App (ServerMessage) — render + status surface
 
-| type | fields | renders as |
-| --- | --- | --- |
-| `agent_chunk` | `in_reply_to, delta` | streaming assistant text |
-| `agent_done` | `in_reply_to, usage?` | turn end + tokens |
-| `agent_message` | `in_reply_to, text, usage?` | full assistant bubble |
-| `tool_request` | `tool_call_id, tool, args` | tool-call card (name + input) |
-| `tool_result` | `tool_call_id, result?, error?` | tool card result/error |
-| `extension_ui_request` | `select｜confirm｜input｜editor｜notify` | interactive prompt |
-| `user_message` | `text, images?` | echoed user bubble (broadcast to all devices) |
-| `compaction` | `summary, tokens_before, ts?` | context-compact marker |
-| `queued_message_state` | `items[]` | pending follow-ups |
-| `pair_ok` / `pair_error` | `... session_started_at` / `code, message` | pairing result |
-| `steer_consumed` / `cancelled` / `error` / `pong` / `bye` | — | status/lifecycle |
+| type                                                      | fields                                     | renders as                                    |
+| --------------------------------------------------------- | ------------------------------------------ | --------------------------------------------- |
+| `agent_chunk`                                             | `in_reply_to, delta`                       | streaming assistant text                      |
+| `agent_done`                                              | `in_reply_to, usage?`                      | turn end + tokens                             |
+| `agent_message`                                           | `in_reply_to, text, usage?`                | full assistant bubble                         |
+| `tool_request`                                            | `tool_call_id, tool, args`                 | tool-call card (name + input)                 |
+| `tool_result`                                             | `tool_call_id, result?, error?`            | tool card result/error                        |
+| `extension_ui_request`                                    | `select｜confirm｜input｜editor｜notify`   | interactive prompt                            |
+| `user_message`                                            | `text, images?`                            | echoed user bubble (broadcast to all devices) |
+| `compaction`                                              | `summary, tokens_before, ts?`              | context-compact marker                        |
+| `queued_message_state`                                    | `items[]`                                  | pending follow-ups                            |
+| `pair_ok` / `pair_error`                                  | `... session_started_at` / `code, message` | pairing result                                |
+| `steer_consumed` / `cancelled` / `error` / `pong` / `bye` | —                                          | status/lifecycle                              |
 
 ### History replay
 
@@ -139,17 +139,17 @@ All Ed25519 (RFC 8032): `@noble/ed25519` (ext) / `ed25519-dalek` (relay) →
 
 ### Three keys
 
-| Key | Lives | Role |
-| --- | --- | --- |
+| Key           | Lives                               | Role                                                              |
+| ------------- | ----------------------------------- | ----------------------------------------------------------------- |
 | **Owner-key** | phone — iOS Keychain, iCloud-synced | authority; signs `mesh_versions`; proves right to pair/revoke PCs |
-| **Pi-key** | per-PC — system keychain | authenticates the PC's relay WS; canonical routing identity |
-| **App-key** | ephemeral, per pairing session | authenticated channel during pair |
+| **Pi-key**    | per-PC — system keychain            | authenticates the PC's relay WS; canonical routing identity       |
+| **App-key**   | ephemeral, per pairing session      | authenticated channel during pair                                 |
 
 ### QR pairing (`pairing/qr.ts`)
 
-+ Pi issues a **16-byte random, base64url** token; TTL **60s**, rotating,
+- Pi issues a **16-byte random, base64url** token; TTL **60s**, rotating,
   **single-use** (atomic consume). Pair TTL clamp 10s–600s.
-+ Phone scans (VisionKit) → `pair_request { token, device_name }` → `pair_ok`.
+- Phone scans (VisionKit) → `pair_request { token, device_name }` → `pair_ok`.
 
 ### Relay connection auth (`relay/src/auth/challenge.rs`)
 
@@ -167,14 +167,14 @@ Ed25519 sig, **then** assert `sha256(owner_pk)` matches the expected hash slot
 
 ## 6. Transport & multi-relay
 
-+ One **`RelayConnection` actor per relay**: owns a `URLSessionWebSocketTask`,
+- One **`RelayConnection` actor per relay**: owns a `URLSessionWebSocketTask`,
   runs the challenge-response on connect, decodes frames → `ServerMessage`,
   encodes `ClientMessage`. Handles reconnect/backoff + heartbeat (`ping`/`pong`).
-+ A **`Mesh` store** aggregates all relay actors. Sessions namespaced
+- A **`Mesh` store** aggregates all relay actors. Sessions namespaced
   `(relayID, sessionID)`; the UI shows one merged, grouped list.
-+ The **same iCloud-synced Owner-key** is the authority across every relay/mesh —
+- The **same iCloud-synced Owner-key** is the authority across every relay/mesh —
   multi-relay multiplies connection + credential bookkeeping, not crypto.
-+ Per-relay: connection health, pairing state, credential entry.
+- Per-relay: connection health, pairing state, credential entry.
 
 ---
 
@@ -182,19 +182,19 @@ Ed25519 sig, **then** assert `sha256(owner_pk)` matches the expected hash slot
 
 `agent_chunk` deltas → **coalescing buffer** → Markdown view.
 
-+ **Markdown:** swift-markdown-ui, `Theme` driven from the **active app theme** (§11).
-+ **Code blocks:** Highlightr as the `CodeSyntaxHighlighter`, using the active
+- **Markdown:** swift-markdown-ui, `Theme` driven from the **active app theme** (§11).
+- **Code blocks:** Highlightr as the `CodeSyntaxHighlighter`, using the active
   theme's matched highlight.js style.
-+ **Theming:** two layers — swift-markdown-ui `Theme` for content + an app-level
+- **Theming:** two layers — swift-markdown-ui `Theme` for content + an app-level
   design-token `Environment` for chrome — both fed by the selected theme (§11).
 
 **Streaming gotcha (the one real engineering nuance):**
 
-+ **Debounce/coalesce** deltas (~50–100 ms) before re-parsing — never per token.
-+ **Defer code-block highlighting until the closing fence arrives** — render an
+- **Debounce/coalesce** deltas (~50–100 ms) before re-parsing — never per token.
+- **Defer code-block highlighting until the closing fence arrives** — render an
   open ``` block as plain monospace; highlight on close (avoids flicker + wasted
   work).
-+ Optionally re-parse only the **last block** as it grows; keep settled blocks static.
+- Optionally re-parse only the **last block** as it grows; keep settled blocks static.
 
 Everything else (tool cards, interactive prompts, session list) is plain SwiftUI
 over the `Codable` events — no Markdown involved.
@@ -204,7 +204,7 @@ over the `Codable` events — no Markdown involved.
 ## 8. Open questions / risks
 
 1. **Canonical byte encodings (top risk).** The exact bytes the signatures cover
-   and the `mesh_versions` blob schema are where a Swift port can *silently*
+   and the `mesh_versions` blob schema are where a Swift port can _silently_
    diverge. Mitigation: read `mesh/canonical.ts` + the relay auth line format,
    and lift the reference **test vectors** (MIT) into Swift unit tests for
    byte-for-byte conformance before trusting the handshake.
@@ -244,15 +244,15 @@ style (code blocks).
 
 Curated set (developer-recognizable; dark + light):
 
-+ **Tokyo Night** (default — matches the terminal setup)
-+ Catppuccin (Mocha / Latte)
-+ Dracula
-+ Nord
-+ Gruvbox Dark
-+ Solarized (Dark / Light)
-+ One Dark
-+ GitHub (Dark / Light)
-+ **Follow system** (auto light/dark)
+- **Tokyo Night** (default — matches the terminal setup)
+- Catppuccin (Mocha / Latte)
+- Dracula
+- Nord
+- Gruvbox Dark
+- Solarized (Dark / Light)
+- One Dark
+- GitHub (Dark / Light)
+- **Follow system** (auto light/dark)
 
 Each theme ships (a) SwiftUI palette tokens and (b) a mapped highlight.js style;
 a `ThemePicker` in Settings switches live. Adding a theme = one palette + one
@@ -265,18 +265,18 @@ code-style mapping, **no view changes**.
 Un Bien must do **at least** what the reference app (`remote_pi` Flutter,
 `app/lib/ui/*`) ships — then exceed it on polish (paseo-grade).
 
-| Reference surface | Un Bien |
-| --- | --- |
-| Onboarding (choose relay) | ✔ + multi-relay setup |
-| QR pairing **+ “paste code” fallback** (60s single-use) | ✔ |
-| Owner-key **sync-required** gate (iCloud Keychain) | ✔ |
-| Sessions / peer list (mesh — all machines, one view) | ✔ aggregated across **multiple relays** |
-| Live chat streaming | ✔ + proper Markdown + syntax highlight + themes |
-| Interactive prompts (`extension_ui_request`: select/confirm/input) | ✔ (dedicated approve/reject `approve_tool` cards were dropped) |
-| Image **render** of session-produced images | ✔ (inbound `user_message.images` ingest exists on the wire; no app attach UI yet) |
-| Settings | ✔ + theme picker |
-| Update prompt | native App Store (skip in-app) |
-| Voice / two-way audio (`data/voice`) | **deferred** (post-parity; not in the store pitch) |
+| Reference surface                                                  | Un Bien                                                                           |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| Onboarding (choose relay)                                          | ✔ + multi-relay setup                                                             |
+| QR pairing **+ “paste code” fallback** (60s single-use)            | ✔                                                                                 |
+| Owner-key **sync-required** gate (iCloud Keychain)                 | ✔                                                                                 |
+| Sessions / peer list (mesh — all machines, one view)               | ✔ aggregated across **multiple relays**                                           |
+| Live chat streaming                                                | ✔ + proper Markdown + syntax highlight + themes                                   |
+| Interactive prompts (`extension_ui_request`: select/confirm/input) | ✔ (dedicated approve/reject `approve_tool` cards were dropped)                    |
+| Image **render** of session-produced images                        | ✔ (inbound `user_message.images` ingest exists on the wire; no app attach UI yet) |
+| Settings                                                           | ✔ + theme picker                                                                  |
+| Update prompt                                                      | native App Store (skip in-app)                                                    |
+| Voice / two-way audio (`data/voice`)                               | **deferred** (post-parity; not in the store pitch)                                |
 
 **UX bar (the paseo-grade delta):** themed animated transcript; tool cards with
 collapsible input/output; sticky streaming indicator; per-relay session
@@ -298,16 +298,16 @@ before trusting any of this.
 (`+ / =`-padded) while the pairing layer emitted **URL-safe** (`- _`, no pad) —
 same 32 bytes, different strings → **silent self-revocations**. Rules:
 
-+ Ed25519 pubkeys / signatures / nonces at the **relay + mesh** boundary are
+- Ed25519 pubkeys / signatures / nonces at the **relay + mesh** boundary are
   **RFC 4648 STANDARD base64, padded**. Not URL-safe.
-+ **Never compare keys as base64 strings.** Decode to the 32 raw bytes and
+- **Never compare keys as base64 strings.** Decode to the 32 raw bytes and
   compare bytes. `sha256(owner_pk)` is over the raw 32 bytes, never the string.
-+ CryptoKit maps cleanly: `Curve25519.Signing.PublicKey.rawRepresentation` (32 B),
+- CryptoKit maps cleanly: `Curve25519.Signing.PublicKey.rawRepresentation` (32 B),
   `.base64EncodedString()` (standard), `privateKey.signature(for:)` (64 B).
 
 ### 10.2 Relay auth handshake (JSONL over WS, all standard base64)
 
-> **Verified against the reference *app* (`app/lib/data/transport/`), not just
+> **Verified against the reference _app_ (`app/lib/data/transport/`), not just
 > the extension.** The APP's wire model has three layers, and differs from
 > the extension's `pi_envelope`/`to_pc` shape below (that shape is how a PC
 > connects, not the phone):
@@ -322,9 +322,9 @@ same 32 bytes, different strings → **silent self-revocations**. Rules:
 > 3. **Routed application** — outer envelope `{peer, room, ct}` where
 >    `ct = base64(utf8(ClientMessage|ServerMessage JSON))`, NOT encrypted.
 >    Inbound routed frames are demuxed by `room == activeRoom`.
-> `pair_request` is a routed frame: set active room to the QR's `rm` (else
-> `main`), then send the `pair_request` ClientMessage in a `{peer:<QR epk>,
-> room, ct}` envelope. This is what `Sources/UnBienCore` implements + tests.
+>    `pair_request` is a routed frame: set active room to the QR's `rm` (else
+>    `main`), then send the `pair_request` ClientMessage in a `{peer:<QR epk>,
+room, ct}` envelope. This is what `Sources/UnBienCore` implements + tests.
 
 Source: `relay/src/auth/challenge.rs`, `transport/relay_client.ts`.
 
@@ -334,35 +334,35 @@ Source: `relay/src/auth/challenge.rs`, `transport/relay_client.ts`.
 → { "type": "auth",       "sig":    "<64B Ed25519 sig, std b64>" }
 ```
 
-+ **Sign the DECODED 32 nonce bytes**, NOT the base64 string: relay does
+- **Sign the DECODED 32 nonce bytes**, NOT the base64 string: relay does
   `vk.verify(nonce_bytes, sig)` where `nonce_bytes: [u8;32]`. In Swift:
   `key.signature(for: Data(base64Encoded: nonceB64)!)`.
-+ `HELLO_TIMEOUT_MS = 5000`. Relay pings ~25 s (liveness; missing pings = dead link).
-+ `room_id` multiplexes N sessions under one pubkey (one pi-ext per cwd). Relay
+- `HELLO_TIMEOUT_MS = 5000`. Relay pings ~25 s (liveness; missing pings = dead link).
+- `room_id` multiplexes N sessions under one pubkey (one pi-ext per cwd). Relay
   rejects a duplicate `(pubkey, room_id)` → treat as `RoomAlreadyOpen`.
 
 ### 10.3 Mesh canonical JSON — only when SIGNING mesh_versions
 
 Source: `mesh/canonical.ts`. **Bit-compatibility contract across Dart/Rust/TS:**
 
-+ object keys sorted by **UTF-16 code-unit order**; **no whitespace** between
+- object keys sorted by **UTF-16 code-unit order**; **no whitespace** between
   tokens; RFC-8259 string escapes; arrays keep insertion order; integers only
   (`version`, `issued_at`). Signed bytes = UTF-8 of that canonical string.
-+ **Verification never re-serializes**: the receiver verifies the **raw blob
+- **Verification never re-serializes**: the receiver verifies the **raw blob
   bytes as-received** against `sig` with `owner_pk`, then asserts
   `sha256(owner_pk)` fills the expected slot. So Un Bien needs the canonicalizer
   **only when the phone mints a mesh_version** (pairing/authorizing a PC);
   attaching + reading needs verify-only.
-+ Swift risk: `JSONEncoder([.sortedKeys])` is **not guaranteed byte-identical**
+- Swift risk: `JSONEncoder([.sortedKeys])` is **not guaranteed byte-identical**
   (sort order + escaping). Hand-roll a JCS-like encoder mirroring `canonicalize`,
   and gate it with the `canonical.test.ts` / `verify.test.ts` fixtures. **This is
   the single highest-conformance-risk item.**
 
 ### 10.4 Envelope, framing, pair token
 
-+ **Framing:** one JSON object per WS **text frame** (JSONL semantics).
-+ **Envelope:** `{ from, to, id (UUIDv7), re, body }`; addresses opaque — echo verbatim.
-+ **QR pair token:** 16 random bytes, base64url — but treat as an **opaque
+- **Framing:** one JSON object per WS **text frame** (JSONL semantics).
+- **Envelope:** `{ from, to, id (UUIDv7), re, body }`; addresses opaque — echo verbatim.
+- **QR pair token:** 16 random bytes, base64url — but treat as an **opaque
   string**; the phone puts it in `pair_request` and never decodes it. TTL 60 s,
   single-use.
 
@@ -377,14 +377,14 @@ Source: `mesh/canonical.ts`. **Bit-compatibility contract across Dart/Rust/TS:**
 
 Un Bien monorepo sources (the current source of truth):
 
-+ Wire types/codec: `extension/src/protocol/{types,codec}.ts`
-+ Pairing: `extension/src/pairing/{qr,crypto,storage}.ts`
-+ Mesh authority: `extension/src/mesh/{verify,canonical,siblings}.ts`
-+ Relay auth (Rust): `relay/src/auth/{challenge,mod}.rs`
-+ Relay transport: `extension/src/transport/relay_client.ts`
-+ Wire protocol doc: [`docs/rpc-envelope.md`](docs/rpc-envelope.md)
+- Wire types/codec: `extension/src/protocol/{types,codec}.ts`
+- Pairing: `extension/src/pairing/{qr,crypto,storage}.ts`
+- Mesh authority: `extension/src/mesh/{verify,canonical,siblings}.ts`
+- Relay auth (Rust): `relay/src/auth/{challenge,mod}.rs`
+- Relay transport: `extension/src/transport/relay_client.ts`
+- Wire protocol doc: [`docs/rpc-envelope.md`](docs/rpc-envelope.md)
 
 Upstream **remote-pi** (MIT, Jacob Moura) for comparison / test vectors:
 
-+ Device identity (Flutter): `app/packages/remote_pi_identity/`
-+ Canonical protocol doc (terse, PT-BR): `PROTOCOL.md`
+- Device identity (Flutter): `app/packages/remote_pi_identity/`
+- Canonical protocol doc (terse, PT-BR): `PROTOCOL.md`
