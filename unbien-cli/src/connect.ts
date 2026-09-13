@@ -385,11 +385,11 @@ try {
 // A token means this is a first pairing; a remembered machine skips straight
 // to routing, since the extension auto-attaches any peer it already trusts.
 if (invite.token) {
-  client.pair(flags.get("name") ?? "unbien-proxy")
+  client.pair(flags.get("name") ?? "unbien-cli")
   rememberPeer({
     epk: invite.epk,
     relayUrl,
-    name: flags.get("name") ?? "unbien-proxy",
+    name: flags.get("name") ?? "unbien-cli",
     pairedAt: new Date().toISOString(),
   })
   console.error("[paired] machine remembered — future runs need no token")
