@@ -67,7 +67,10 @@ export function loadRelays(path = RELAYS_PATH): RememberedRelay[] {
   }
 }
 
-export function rememberRelay(relay: RememberedRelay, path = RELAYS_PATH): void {
+export function rememberRelay(
+  relay: RememberedRelay,
+  path = RELAYS_PATH,
+): void {
   const relays = loadRelays(path).filter((r) => r.url !== relay.url)
   relays.push(relay)
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
@@ -80,6 +83,8 @@ export function forgetRelay(urlOrName: string, path = RELAYS_PATH): boolean {
     (r) => r.url !== urlOrName && r.name !== urlOrName,
   )
   if (filtered.length === relays.length) return false
-  writeFileSync(path, JSON.stringify({ relays: filtered }, null, 2), { mode: 0o600 })
+  writeFileSync(path, JSON.stringify({ relays: filtered }, null, 2), {
+    mode: 0o600,
+  })
   return true
 }

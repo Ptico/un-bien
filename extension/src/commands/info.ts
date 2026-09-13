@@ -124,30 +124,30 @@ export async function _cmdList(
   // session-only if the relay is down or doesn’t respond.
   let onlineSet = new Set<string>()
   if (deps.relay) {
-    const states = await new Promise<
-      Array<{ peer: string; online: boolean }>
-    >((resolve) => {
-      const timer = setTimeout(() => resolve([]), 3_000)
-      const handler = (line: string) => {
-        try {
-          const parsed = JSON.parse(line) as Record<string, unknown>
-          if (parsed.type !== "presence") return
-          clearTimeout(timer)
-          resolve(
-            (parsed.states as Array<{ peer: string; online: boolean }>) ?? [],
-          )
-        } catch {
-          /* not JSON */
+    const states = await new Promise<Array<{ peer: string; online: boolean }>>(
+      (resolve) => {
+        const timer = setTimeout(() => resolve([]), 3_000)
+        const handler = (line: string) => {
+          try {
+            const parsed = JSON.parse(line) as Record<string, unknown>
+            if (parsed.type !== "presence") return
+            clearTimeout(timer)
+            resolve(
+              (parsed.states as Array<{ peer: string; online: boolean }>) ?? [],
+            )
+          } catch {
+            /* not JSON */
+          }
         }
-      }
-      deps.relay!.on("message", handler)
-      deps.relay!.send(
-        JSON.stringify({
-          type: "presence_check",
-          peers: entries.map((e) => e.runtimeKey),
-        }),
-      )
-    })
+        deps.relay!.on("message", handler)
+        deps.relay!.send(
+          JSON.stringify({
+            type: "presence_check",
+            peers: entries.map((e) => e.runtimeKey),
+          }),
+        )
+      },
+    )
     onlineSet = new Set(states.filter((s) => s.online).map((s) => s.peer))
   }
 
@@ -156,11 +156,7 @@ export async function _cmdList(
     .map(({ inspected, runtimeKey }) => {
       const onRelay = onlineSet.has(runtimeKey)
       const onSession = deps.activePeers.has(runtimeKey)
-      const tag = relayUp
-        ? onRelay
-          ? " 🟢 on relay"
-          : " ⚪ off relay"
-        : ""
+      const tag = relayUp ? (onRelay ? " 🟢 on relay" : " ⚪ off relay") : ""
       const session = onSession ? " (this session)" : ""
       return `• ${inspected.rawHandle.slice(0, 8)} — ${inspected.record.name}${tag}${session}`
     })
@@ -168,7 +164,6 @@ export async function _cmdList(
   const scope = relayUp ? "" : " (relay off — session attachment only)"
   ctx.ui.notify(`[un-bien] Paired devices:${scope}\n${lines}`, "info")
 }
-
 
 /**
  * `/unbien config` — print the effective relay URL and where it came from.

@@ -16,7 +16,12 @@ const [verb, ...rest] = process.argv.slice(2)
 
 function normalizeUrl(raw: string): string {
   let url = raw.trim()
-  if (!url.startsWith("ws://") && !url.startsWith("wss://") && !url.startsWith("http://") && !url.startsWith("https://")) {
+  if (
+    !url.startsWith("ws://") &&
+    !url.startsWith("wss://") &&
+    !url.startsWith("http://") &&
+    !url.startsWith("https://")
+  ) {
     url = `http://${url}`
   }
   // Accept http(s) for input; the client converts to ws(s) on connect.
@@ -76,8 +81,7 @@ switch (verb) {
       )
     } else {
       console.error(
-        "Relays:\n" +
-          relays.map((r) => `  ${r.name} → ${r.url}`).join("\n"),
+        "Relays:\n" + relays.map((r) => `  ${r.name} → ${r.url}`).join("\n"),
       )
     }
     break

@@ -24,16 +24,12 @@ public struct SessionState: Equatable, Sendable {
     /// `in_reply_to` of the turn currently streaming (chunks or reasoning),
     /// or `nil` when idle. This is the `target_id` a `cancel` should carry.
     public private(set) var activeTurnID: String?
-    /// The peer's AUTHORITATIVE busy flag from `get_state`, independent of
-    /// whether we witnessed the turn's start.
-    ///
-    /// `activeTurnID` is derived purely from stream events, so a turn-start
-    /// frame missed while backgrounded leaves the busy UI off with nothing to
-    /// correct it — events can only ever tell us about turns we saw. This is
-    /// the floor under that: a status refetch reports busy even when no frame
-    /// did. Kept SEPARATE from `activeTurnID` rather than synthesising one,
-    /// because that id is a cancel target and a fabricated one would address
-    /// a turn the peer has never heard of.
+    /// The peer's AUTHORITATIVE busy flag from `get_state`. `activeTurnID` is
+    /// derived purely from stream events, so a turn-start missed while
+    /// backgrounded leaves the busy UI off with nothing to correct it; this is
+    /// the floor under that. SEPARATE from `activeTurnID` rather than a
+    /// synthesised one, because that id is a cancel target and a fabricated
+    /// one would address a turn the peer never heard of.
     public private(set) var peerBusy = false
 
     /// VISIBLE-arrival version for transcript bottom-following (scroll
@@ -298,13 +294,10 @@ public struct SessionState: Equatable, Sendable {
         openReasoningIndex = nil
     }
 
-    /// get_state reconcile (design 01M1NFAE): the peer's busy flag is the
-    /// authority in BOTH directions.
-    ///
-    /// Not streaming + a local open stream/turn = we missed the terminal
-    /// events; finalize the bubble (dots stop) and clear activeTurnID, with
-    /// content riding get_entries. Streaming = the peer is working whether or
-    /// not we ever saw the turn begin, so the busy surfaces must show.
+    /// get_state reconcile (design 01M1NFAE), authoritative in BOTH directions.
+    /// Not streaming + a local open stream/turn = we missed the terminal events;
+    /// finalize the bubble and clear activeTurnID, content riding get_entries.
+    /// Streaming = the peer is working whether or not we saw the turn begin.
     public mutating func reconcileBusyState(isStreaming: Bool) {
         peerBusy = isStreaming
         guard !isStreaming, activeTurnID != nil || openAssistantIndex != nil

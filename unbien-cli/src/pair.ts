@@ -71,7 +71,9 @@ if (!relayUrl) {
   const relays = loadRelays()
   if (relays.length === 1) {
     relayUrl = relays[0]!.url
-    console.error(`[pair] using remembered relay: ${relays[0]!.name} (${relayUrl})`)
+    console.error(
+      `[pair] using remembered relay: ${relays[0]!.name} (${relayUrl})`,
+    )
   } else if (relays.length > 1) {
     console.error(
       "Multiple relays remembered — pick one:\n" +
