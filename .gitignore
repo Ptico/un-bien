@@ -36,3 +36,4 @@ app/Prototypes/*/*.xcodeproj
 **/*.quarto_ipynb
 /_site/
 app/build-mac/
+TESTING.md

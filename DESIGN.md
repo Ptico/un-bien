@@ -7,7 +7,7 @@
 > Not paseo. Same "client → server-hosted sessions" shape, but pi-only, native
 > Swift, and multi-relay.
 
-Status: **built, actively maturing** (WIP; functional by first public release).
+Status: **near App Store release** — TestFlight verified on both platforms; see APPSTORE.md for the submission checklist.
 The app lives under `app/` (`Sources/UnBienCore`), the Pi extension under
 `extension/`, and the relay under `relay/`. This doc is the consolidated decision
 record + architecture. The wire protocol and crypto were originally extracted
