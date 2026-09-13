@@ -10,6 +10,7 @@ project:
     - extension/docs/daemon.md
     - relay/README.md
     - launcher/README.md
+    - unbien-cli/README.md
     - docs/design.md
     - DESIGN.md
     - docs/rpc-envelope.md
@@ -80,6 +81,8 @@ website:
             href: relay/README.md
           - text: "Machine launcher daemon"
             href: launcher/README.md
+          - text: "Terminal client (CLI)"
+            href: unbien-cli/README.md
 
 format:
   html:
