@@ -93,6 +93,12 @@ export async function _cmdPeers(
   )
 }
 
+/**
+ * `/unbien devices` — combined device report: relay presence (who has a
+ * live WebSocket to the relay) + session attachment (who is attached to THIS
+ * session’s channel). Uses the relay’s presence_check when the relay is up;
+ * falls back to session-only otherwise.
+ */
 export async function _cmdList(
   deps: CommandDeps,
   ctx: Pick<ExtensionContext, "ui">,
@@ -102,23 +108,67 @@ export async function _cmdList(
     ctx.ui.notify("[un-bien] No paired devices.", "info")
     return
   }
-  // Multi-channel (W2D): each peer is either `online` (channel attached
-  // right now) or `offline` (in peers.json but not connected). Replaces
-  // the singleton " (active)" marker that only ever marked one peer.
-  const lines = peers
-    .flatMap((record) => {
-      const inspected = _inspectPeerRecord(record)
-      if (!inspected) return []
-      const tag =
-        inspected.runtimeKey !== null &&
-        deps.activePeers.has(inspected.runtimeKey)
-          ? " 🟢 online"
-          : " ⚪ offline"
-      return `• ${inspected.rawHandle.slice(0, 8)} — ${inspected.record.name}${tag}`
+
+  const entries = peers.flatMap((record) => {
+    const inspected = _inspectPeerRecord(record)
+    if (!inspected || inspected.runtimeKey === null) return []
+    return [{ inspected, runtimeKey: inspected.runtimeKey }]
+  })
+  if (entries.length === 0) {
+    ctx.ui.notify("[un-bien] No valid paired devices.", "warning")
+    return
+  }
+
+  // RELAY PRESENCE: who has a live WebSocket right now (regardless of
+  // which session they’re attached to). 3s timeout; falls back to
+  // session-only if the relay is down or doesn’t respond.
+  let onlineSet = new Set<string>()
+  if (deps.relay) {
+    const states = await new Promise<
+      Array<{ peer: string; online: boolean }>
+    >((resolve) => {
+      const timer = setTimeout(() => resolve([]), 3_000)
+      const handler = (line: string) => {
+        try {
+          const parsed = JSON.parse(line) as Record<string, unknown>
+          if (parsed.type !== "presence") return
+          clearTimeout(timer)
+          resolve(
+            (parsed.states as Array<{ peer: string; online: boolean }>) ?? [],
+          )
+        } catch {
+          /* not JSON */
+        }
+      }
+      deps.relay!.on("message", handler)
+      deps.relay!.send(
+        JSON.stringify({
+          type: "presence_check",
+          peers: entries.map((e) => e.runtimeKey),
+        }),
+      )
+    })
+    onlineSet = new Set(states.filter((s) => s.online).map((s) => s.peer))
+  }
+
+  const relayUp = deps.relay !== null
+  const lines = entries
+    .map(({ inspected, runtimeKey }) => {
+      const onRelay = onlineSet.has(runtimeKey)
+      const onSession = deps.activePeers.has(runtimeKey)
+      const tag = relayUp
+        ? onRelay
+          ? " 🟢 on relay"
+          : " ⚪ off relay"
+        : ""
+      const session = onSession ? " (this session)" : ""
+      return `• ${inspected.rawHandle.slice(0, 8)} — ${inspected.record.name}${tag}${session}`
     })
     .join("\n")
-  ctx.ui.notify(`[un-bien] Paired devices:\n${lines}`, "info")
+  const scope = relayUp ? "" : " (relay off — session attachment only)"
+  ctx.ui.notify(`[un-bien] Paired devices:${scope}\n${lines}`, "info")
 }
+
 
 /**
  * `/unbien config` — print the effective relay URL and where it came from.

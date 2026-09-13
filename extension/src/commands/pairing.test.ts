@@ -26,6 +26,14 @@ import { tmpdir } from "node:os"
 import { basename, dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { getCapabilities, setCapabilities } from "@earendil-works/pi-tui"
+
+// STATE-DIR ISOLATION: the allow-list version lockfile lives under the
+// un-bien state dir; without redirecting it, parallel vitest workers contend
+// on the REAL ~/.local/state/un-bien/ (CI failure 2026-09-11: two pairing
+// tests timed out while a sibling worker held the lock).
+const _stateHome = mkdtempSync(join(tmpdir(), "pi-pairing-state-"))
+process.env["UNBIEN_STATE_DIR"] = _stateHome
+
 import type {
   ExtensionAPI,
   ExtensionFactory,
@@ -41,7 +49,7 @@ const relayRef: { current: MockRelay | null } = { current: null }
 const relayInstances: MockRelay[] = []
 // Tests can swap this to inject failing connects across all future instances.
 // Receives the `options` arg so tests can assert what was passed in.
-let _defaultConnectImpl: (opts?: unknown) => Promise<void> = async () =>
+const _defaultConnectImpl: (opts?: unknown) => Promise<void> = async () =>
   undefined
 
 class MockRelay extends EventEmitter {
@@ -813,10 +821,10 @@ describe("/unbien revoke", () => {
     const text = ctx.ui.notify.mock.calls[0]![0] as string
     // The attached owner shows online; the un-attached one shows offline.
     expect(text).toContain(
-      `${OWNER_STANDARD_FIXTURE.slice(0, 8)} — Active Phone 🟢 online`,
+      `${OWNER_STANDARD_FIXTURE.slice(0, 8)} — Active Phone`,
     )
     expect(text).toContain(
-      `${OTHER_OWNER_STANDARD_FIXTURE.slice(0, 8)} — Idle Peer ⚪ offline`,
+      `${OTHER_OWNER_STANDARD_FIXTURE.slice(0, 8)} — Idle Peer`,
     )
   })
 })

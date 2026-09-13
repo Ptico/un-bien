@@ -760,6 +760,32 @@ async function submit(text: string): Promise<void> {
     }
     return
   }
+  // /connect (or /sessions): switch to a different session on this machine
+  // without quitting. Lists rooms, picks one, clears local state, re-syncs.
+  if (text === "/connect" || text === "/sessions") {
+    const rooms = await client.listRooms()
+    // Exclude the current room from the picker (it's where we already are)
+    const others = rooms.filter((r) => r.room_id !== client.room)
+    if (others.length === 0) {
+      emit(["  no other sessions open on this machine"])
+      return
+    }
+    const chosen = await pickRoom(others)
+    if (!chosen) return
+    client.room = chosen.room_id
+    // Reset the local transcript state — the new session's sync rebuilds it
+    seen.length = 0
+    walkedEntries = []
+    drawn = 0
+    syncWindow = new Set()
+    client.requestSync()
+    emit([
+      `  switched to ${chosen.name ?? chosen.room_id.slice(0, 8)} — ${chosen.cwd ?? "?"}`,
+      "  transcript rebuilding from sync…",
+    ])
+    return
+  }
+
   if (text.startsWith("/steer ")) client.steer(text.slice(7))
   else if (text.startsWith("/")) emit([`  unknown command: ${text}`])
   else {
