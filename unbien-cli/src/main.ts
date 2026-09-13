@@ -7,12 +7,16 @@ const COMMANDS = new Map([
 ])
 
 const [command] = process.argv.slice(2)
-const load = command ? COMMANDS.get(command) : undefined
+// DEFAULT to `connect` when no subcommand given: the overwhelmingly common
+// case is attaching to the machine (or resuming a remembered one); the usage
+// banner still shows the full surface for discovery.
+const verb = command ?? (COMMANDS.has("connect") ? "connect" : undefined)
+const load = verb ? COMMANDS.get(verb) : undefined
 
 if (!load) {
   console.error(
-    "usage: unbien <command> [options]\n\n" +
-      "  connect   attach to a live pi session over the relay\n" +
+    `usage: unbien [command] [options]\n\n` +
+      "  connect   attach to a live pi session over the relay (default)\n" +
       "  replay    render a captured envelope stream from a file\n\n" +
       "run `unbien <command>` with no arguments for its options.",
   )
@@ -20,5 +24,5 @@ if (!load) {
 }
 
 // The subcommands parse `process.argv.slice(2)` themselves, so drop the verb.
-process.argv.splice(2, 1)
+if (verb) process.argv.splice(2, 1)
 await load()
