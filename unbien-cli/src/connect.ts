@@ -283,21 +283,33 @@ function emit(lines: readonly string[]): void {
   else for (const line of lines) console.log(line)
 }
 
+// RENDER COALESCING (the CLI wedge fix): envelopes arrive in bursts during
+// streaming, and draw() is O(n) per call (full reduce + renderTranscript).
+// Calling it on EVERY envelope starves the event loop — WebSocket reads, TUI
+// repaints, and keystrokes all queue behind a synchronous render cascade.
+// This coalesces to AT MOST one render per event-loop turn (setImmediate
+// fires after I/O, unlike process.nextTick which runs before it).
+let drawPending = false
 function draw(): void {
-  const lines = renderTranscript(
-    reduce(seen),
-    width,
-    cwd,
-    !settings.showThinking,
-  )
-  if (shell) {
-    // The shell owns the screen, so hand it the whole transcript: history
-    // replay re-reduces from scratch and would otherwise duplicate rows.
-    shell.setTranscript(lines)
-  } else {
-    for (const line of lines.slice(drawn)) console.log(line)
-  }
-  drawn = lines.length
+  if (drawPending) return
+  drawPending = true
+  setImmediate(() => {
+    drawPending = false
+    const lines = renderTranscript(
+      reduce(seen),
+      width,
+      cwd,
+      !settings.showThinking,
+    )
+    if (shell) {
+      // The shell owns the screen, so hand it the whole transcript: history
+      // replay re-reduces from scratch and would otherwise duplicate rows.
+      shell.setTranscript(lines)
+    } else {
+      for (const line of lines.slice(drawn)) console.log(line)
+    }
+    drawn = lines.length
+  })
 }
 
 /** Assistant text accumulated from deltas while a turn is in flight. */

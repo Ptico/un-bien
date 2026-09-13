@@ -229,6 +229,28 @@ export class Shell {
     this.tui.requestRender()
   }
 
+  /** BACKFILL phase: muted-color spinner while replaying history. Distinct
+   *  from the agent-working state (accent color) so the user can tell
+   *  "loading your transcript" from "the agent is thinking." */
+  setLoading(on: boolean): void {
+    if (on) {
+      this.working.setIndicator({
+        frames: ["◇", "◈", "◆", "◈"],   // geometric, distinct from the agent's braille
+        intervalMs: 400,                     // slower — it's a bulk load, not thinking
+      })
+      this.working.start()
+      this.working.setMessage("replaying history")
+      this.isWorking = true
+    } else {
+      // Restore the agent spinner (default braille frames at the normal rate)
+      this.working.setIndicator(undefined)
+      this.working.stop()
+      this.working.setText("")
+      this.isWorking = false
+    }
+    this.tui.requestRender()
+  }
+
   /**
    * Transcript must live INSIDE the TUI: a full repaint emits `\x1b[3J`, which
    * clears the scrollback buffer, so anything written straight to stdout is
