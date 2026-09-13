@@ -306,22 +306,18 @@ function draw(): void {
     drawPending = false
     const items = reduce(seen)
     // WINDOW: the TUI shows the bottom — older items are dead render cost
-    const windowed = items.length > DRAW_ITEM_WINDOW
-      ? items.slice(-DRAW_ITEM_WINDOW)
-      : items
-    const lines = renderTranscript(
-      windowed,
-      width,
-      cwd,
-      !settings.showThinking,
-    )
-    const capped = lines.length > DRAW_LINE_CAP
-      ? lines.slice(-DRAW_LINE_CAP)
-      : lines
+    const windowed =
+      items.length > DRAW_ITEM_WINDOW ? items.slice(-DRAW_ITEM_WINDOW) : items
+    const lines = renderTranscript(windowed, width, cwd, !settings.showThinking)
+    const capped =
+      lines.length > DRAW_LINE_CAP ? lines.slice(-DRAW_LINE_CAP) : lines
     if (shell) {
       shell.setTranscript(capped)
     } else {
-      for (const line of capped.slice(Math.max(0, drawn - (lines.length - capped.length))) ) console.log(line)
+      for (const line of capped.slice(
+        Math.max(0, drawn - (lines.length - capped.length)),
+      ))
+        console.log(line)
     }
     drawn = lines.length
   })

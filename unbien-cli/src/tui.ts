@@ -235,8 +235,8 @@ export class Shell {
   setLoading(on: boolean): void {
     if (on) {
       this.working.setIndicator({
-        frames: ["◇", "◈", "◆", "◈"],   // geometric, distinct from the agent's braille
-        intervalMs: 400,                     // slower — it's a bulk load, not thinking
+        frames: ["◇", "◈", "◆", "◈"], // geometric, distinct from the agent's braille
+        intervalMs: 400, // slower — it's a bulk load, not thinking
       })
       this.working.start()
       this.working.setMessage("replaying history")
