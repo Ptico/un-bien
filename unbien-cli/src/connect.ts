@@ -37,7 +37,9 @@ import {
 } from "./panels.js"
 import { renderStreaming, renderThinking, renderTranscript } from "./render.js"
 import { loadSettings, saveSettings, settingsPath } from "./settings.js"
-import { loadPeers, rememberPeer } from "./store.js"
+import { loadPeers, rememberPeer, loadRelays } from "./store.js"
+import type { PairedPeer } from "./store.js"
+import type { Ed25519Keypair } from "@geohar/un-bien/client"
 
 function parseArgs(argv: readonly string[]) {
   const positional: string[] = []
@@ -88,6 +90,87 @@ function resolveTarget(): { invite: PairingInvite; relayUrl: string } | null {
   }
 }
 
+/** A session choice enriched with relay provenance (which relay+peer it
+ *  came from) so the unified picker can disambiguate machines on different
+ *  relays that happen to share a session name. */
+interface SessionChoice extends RoomInfo {
+  relayUrl: string
+  relayLabel: string
+}
+
+/** Group peers by their relay URL — each group becomes one relay connection. */
+function peersByRelay(peers: readonly PairedPeer[]): Map<string, PairedPeer[]> {
+  const groups = new Map<string, PairedPeer[]>()
+  for (const p of peers) {
+    const list = groups.get(p.relayUrl) ?? []
+    list.push(p)
+    groups.set(p.relayUrl, list)
+  }
+  return groups
+}
+
+/** Relay label for the picker: the relay's registered name if known, else the
+ *  URL's hostname. Short — it's an inline tag, not a column. */
+function relayLabelFor(url: string): string {
+  const remembered = loadRelays().find((r) => r.url === url)
+  if (remembered) return remembered.name
+  try {
+    return new URL(url).hostname
+  } catch {
+    return url.slice(0, 20)
+  }
+}
+
+/** Fan out to every relay that has peers, list rooms from each machine,
+ *  aggregate with provenance. Unreachable relays are skipped with a note —
+ *  one dead relay must not wedge the whole picker. */
+async function listAllSessions(
+  keypair: Ed25519Keypair,
+): Promise<{ choices: SessionChoice[]; clients: Map<string, SessionClient> }> {
+  const groups = peersByRelay(loadPeers())
+  const clients = new Map<string, SessionClient>()
+  const choices: SessionChoice[] = []
+  const deadRelays: string[] = []
+
+  await Promise.all(
+    [...groups.entries()].map(async ([relayUrl, relayPeers]): Promise<void> => {
+      // The invite's epk is per-machine; we need one client per relay, but
+      // listRooms is scoped per invite.epk — so we create one client per
+      // (relay, machine) pair. The FIRST machine on each relay provides the
+      // client; subsequent machines on the same relay reuse it (listRooms
+      // just sends rooms_check for that machine's epk).
+      for (const peer of relayPeers) {
+        const invite: PairingInvite = {
+          token: "",
+          epk: peer.epk,
+          roomId: "main",
+        }
+        let client = clients.get(relayUrl)
+        if (!client) {
+          client = new SessionClient(relayUrl, keypair, invite)
+          try {
+            await client.connect()
+            clients.set(relayUrl, client)
+          } catch {
+            deadRelays.push(relayLabelFor(relayUrl))
+            return
+          }
+        }
+        const label = relayLabelFor(relayUrl)
+        const rooms = await client.listRooms()
+        for (const room of rooms) {
+          choices.push({ ...room, relayUrl, relayLabel: label })
+        }
+      }
+    }),
+  )
+
+  if (deadRelays.length > 0) {
+    console.error(`[relay] unreachable: ${deadRelays.join(", ")} (skipped)`)
+  }
+  return { choices, clients }
+}
+
 const resolved = resolveTarget()
 if (!resolved) {
   console.error(
@@ -128,7 +211,7 @@ const openAsks = new Map<string, AskPrompt>()
 let syncWindow: Set<string> | null = null
 let quitting = false
 function hardQuit(reason: string): void {
-  if (quitting) process.exit(130)  // double-interrupt: immediate (already quitting)
+  if (quitting) process.exit(130) // double-interrupt: immediate (already quitting)
   quitting = true
   // Once the shell exists, pi owns the terminal — let its teardown run rather
   // than restoring stdin by hand (which loses the original raw-mode state).
@@ -157,7 +240,9 @@ const appliedTheme = await applyTheme(flags.get("theme") ?? settings.theme)
 if (appliedTheme.startsWith("dark (")) console.error(`[theme] ${appliedTheme}`)
 
 const { invite, relayUrl } = resolved
-const client = new SessionClient(relayUrl, loadOrCreateIdentity(), invite)
+let client = new SessionClient(relayUrl, loadOrCreateIdentity(), invite)
+// Note: in the multi-relay path, the client's internals may be re-bound to
+// the chosen relay's connection after the session picker (see below).
 
 const width = process.stdout.columns ?? 100
 /** Frames seen so far; the transcript is re-reduced from the whole stream. */
@@ -284,7 +369,10 @@ function paintWidgets(): void {
   shell.setWidgets(lines)
 }
 
-client.on("envelope", (env) => {
+/** Wire the SessionClient event surface — called on whichever client the
+ *  multi-relay picker promoted (single-relay: the original, called once). */
+function wireClient(c: SessionClient): void {
+c.on("envelope", (env) => {
   const kind = env.rpc ? "rpc" : env.evt ? "evt" : "ub"
   const inner = (env.rpc ?? env.evt ?? env.ub) as { type?: string } | undefined
   trace("in", `${kind} ${inner?.type ?? "?"}`)
@@ -341,10 +429,12 @@ client.on("control", (frame) => {
   }
 })
 
-client.on("close", () => {
+c.on("close", () => {
   console.error("[relay] connection closed")
   process.exit(1)
 })
+}
+wireClient(client)
 
 function describeSession(room: RoomInfo, index: number): string {
   const label = room.name ?? room.sessionId?.slice(0, 8) ?? room.room_id
@@ -395,29 +485,54 @@ if (invite.token) {
   console.error("[paired] machine remembered — future runs need no token")
 }
 
-const rooms = await client.listRooms()
-if (rooms.length === 0) {
+// MULTI-RELAY SESSION LISTING: fan out to every relay with paired peers,
+// aggregate rooms with provenance. Falls back to the single-relay path when
+// only one relay is in play (identical to the pre-multi-relay behavior).
+const relayGroups = peersByRelay(loadPeers())
+const multiRelay = !target?.startsWith("unbien://") && relayGroups.size > 1
+
+let choices: SessionChoice[]
+let clientsByRelay: Map<string, SessionClient> | null = null
+
+if (multiRelay) {
+  const result = await listAllSessions(loadOrCreateIdentity())
+  choices = result.choices
+  clientsByRelay = result.clients
+  // Close the non-chosen relay clients after picking (below).
+} else {
+  await client.connect()
+  const rooms = await client.listRooms()
+  const label = relayLabelFor(relayUrl)
+  choices = rooms.map((room) => ({ ...room, relayUrl, relayLabel: label }))
+}
+
+if (choices.length === 0) {
   console.error("[sessions] none open — is a pi running on that machine?")
   process.exit(1)
 }
 
 if (flags.has("list")) {
-  console.error("Sessions on this machine:\n")
-  rooms.forEach((room, i) => console.error(describeSession(room, i)))
+  console.error("Sessions:\n")
+  choices.forEach((room, i) => {
+    const relay = multiRelay ? ` [${room.relayLabel}]` : ""
+    console.error(`  ${describeSession(room, i)}${relay}`)
+  })
   process.exit(0)
 }
 
 const wantedId = flags.get("session")
 const wantedName = flags.get("session-name")
 
-let chosen: RoomInfo | null
+let chosen: (RoomInfo & Partial<SessionChoice>) | null
 if (wantedId) {
-  chosen = rooms.find((r) => matchesSessionId(r, wantedId)) ?? null
+  chosen = choices.find((r) => matchesSessionId(r, wantedId)) ?? null
   if (!chosen) console.error(`[sessions] no session with id "${wantedId}"`)
 } else if (wantedName) {
   // Names are user-set and NOT unique, so an ambiguous one must not silently
   // pick a session — that would attach to an arbitrary agent.
-  const named = rooms.filter((r) => r.name === wantedName)
+  const named = choices.filter(
+    (r) => r.name === wantedName && (!multiRelay || r.relayUrl === relayUrl),
+  )
   if (named.length > 1) {
     console.error(`[sessions] "${wantedName}" is ambiguous — use --session:`)
     named.forEach((room, i) => console.error(describeSession(room, i)))
@@ -426,10 +541,27 @@ if (wantedId) {
   chosen = named[0] ?? null
   if (!chosen) console.error(`[sessions] no session named "${wantedName}"`)
 } else {
-  chosen = await pickRoom(rooms)
+  chosen = await pickRoom(choices)
 }
 
 if (!chosen) process.exit(1)
+
+// MULTI-RELAY: promote the chosen relay's client, close the others.
+if (multiRelay && clientsByRelay) {
+  const promoted = chosen.relayUrl ? clientsByRelay.get(chosen.relayUrl) : undefined
+  for (const [url, c] of clientsByRelay) {
+    if (url !== chosen.relayUrl) {
+      try { c.close() } catch { /* already down */ }
+    }
+  }
+  if (promoted) {
+    // Adopt the promoted client wholesale: event listeners re-wired below
+    // (the original client's listeners stay on the abandoned instance).
+    try { client.close() } catch { /* not connected */ }
+    client = promoted
+    wireClient(client)
+  }
+}
 
 client.room = chosen.room_id
 cwd = chosen.cwd ?? cwd
