@@ -20,14 +20,14 @@ npm install -g @geohar/unbien-cli
 
 ## Commands
 
-| Command | What it does |
-| --- | --- |
-| `unbien` | Connect (default — same as `unbien connect`) |
-| `unbien connect [options]` | Attach to a live pi session |
-| `unbien pair <invite>` | Pair with a machine (paste its `unbien://` URI) |
-| `unbien relay <sub>` | Manage remembered relays (`add` / `remove` / `list`) |
-| `unbien replay <file>` | Render a captured envelope stream offline |
-| `unbien --version` | Print the version |
+| Command                    | What it does                                         |
+| -------------------------- | ---------------------------------------------------- |
+| `unbien`                   | Connect (default — same as `unbien connect`)         |
+| `unbien connect [options]` | Attach to a live pi session                          |
+| `unbien pair <invite>`     | Pair with a machine (paste its `unbien://` URI)      |
+| `unbien relay <sub>`       | Manage remembered relays (`add` / `remove` / `list`) |
+| `unbien replay <file>`     | Render a captured envelope stream offline            |
+| `unbien --version`         | Print the version                                    |
 
 ## `unbien connect`
 
@@ -42,16 +42,16 @@ unbien connect <peer-name>         # attach to a specific paired machine
 
 ### Options
 
-| Flag | Description |
-| --- | --- |
-| `--relay <url>` | Relay URL (default: `$UNBIEN_RELAY`, then the peer's own relay) |
-| `--session <id>` | Attach to a specific session by id |
-| `--session-name <n>` | Attach by session name |
-| `--name <device>` | Device name shown in the machine's `/unbien devices` (default: `unbien-cli`) |
-| `--theme <name>` | Override your pi theme |
-| `--list` | List sessions and exit |
-| `--list-themes` | Show available themes and exit |
-| `--debug` | Print envelope traces to stderr |
+| Flag                 | Description                                                                  |
+| -------------------- | ---------------------------------------------------------------------------- |
+| `--relay <url>`      | Relay URL (default: `$UNBIEN_RELAY`, then the peer's own relay)              |
+| `--session <id>`     | Attach to a specific session by id                                           |
+| `--session-name <n>` | Attach by session name                                                       |
+| `--name <device>`    | Device name shown in the machine's `/unbien devices` (default: `unbien-cli`) |
+| `--theme <name>`     | Override your pi theme                                                       |
+| `--list`             | List sessions and exit                                                       |
+| `--list-themes`      | Show available themes and exit                                               |
+| `--debug`            | Print envelope traces to stderr                                              |
 
 ### Multi-relay sessions
 
@@ -71,9 +71,9 @@ Standalone pairing — no full connect round-trip needed. Re-pair after a
 revoke, or pair a second machine. Run with no arguments to see remembered
 machines.
 
-| Flag | Description |
-| --- | --- |
-| `--name, -n <name>` | Device name (default: `unbien-cli`) |
+| Flag                | Description                                                   |
+| ------------------- | ------------------------------------------------------------- |
+| `--name, -n <name>` | Device name (default: `unbien-cli`)                           |
 | `--relay, -r <url>` | Relay URL (default: `$UNBIEN_RELAY`, then the relay registry) |
 
 Relay resolution order: `--relay` flag → `$UNBIEN_RELAY` env → single
@@ -95,22 +95,22 @@ specified.
 
 Once connected, the prompt accepts slash commands:
 
-| Command | Description |
-| --- | --- |
-| `/help` | List commands |
-| `/connect` | Switch to a different session (also `/sessions`) |
-| `/tree` | Browse turns — `f` forks a new session, `b` branches in place |
-| `/fork <id>` | Fork a new session from an earlier message |
-| `/branch <id>` | Branch in place from an earlier message |
-| `/plan [verb]` | Pin the plan panel (`toggle`/`expand`/`collapse`/`hide`/`filter`/`lines <n>`) |
-| `/subagents [verb]` | Pin the subagents panel (`toggle`/`expand`/`collapse`/`hide`) |
-| `/model` | Switch model |
-| `/thinking <level>` | Set thinking level |
-| `/compact` | Compact the session context |
-| `/abort` | Abort the current turn |
-| `/set <key> <value>` | Client settings (e.g. `/set streamThinking on`) |
-| `/steer <text>` | Send a steering message mid-turn |
-| `/quit` | Detach; the remote session keeps running |
+| Command              | Description                                                                   |
+| -------------------- | ----------------------------------------------------------------------------- |
+| `/help`              | List commands                                                                 |
+| `/connect`           | Switch to a different session (also `/sessions`)                              |
+| `/tree`              | Browse turns — `f` forks a new session, `b` branches in place                 |
+| `/fork <id>`         | Fork a new session from an earlier message                                    |
+| `/branch <id>`       | Branch in place from an earlier message                                       |
+| `/plan [verb]`       | Pin the plan panel (`toggle`/`expand`/`collapse`/`hide`/`filter`/`lines <n>`) |
+| `/subagents [verb]`  | Pin the subagents panel (`toggle`/`expand`/`collapse`/`hide`)                 |
+| `/model`             | Switch model                                                                  |
+| `/thinking <level>`  | Set thinking level                                                            |
+| `/compact`           | Compact the session context                                                   |
+| `/abort`             | Abort the current turn                                                        |
+| `/set <key> <value>` | Client settings (e.g. `/set streamThinking on`)                               |
+| `/steer <text>`      | Send a steering message mid-turn                                              |
+| `/quit`              | Detach; the remote session keeps running                                      |
 
 Ctrl-C exits (the terminal is restored cleanly). Ctrl-D also exits.
 
@@ -135,11 +135,11 @@ devices, revocation) lives in that package's `unbien-admin` CLI.
 
 ## Files
 
-| Path | Purpose |
-| --- | --- |
-| `~/.config/unbien-cli/settings.json` | Client settings (theme, thinking, panel modes) |
-| `~/.local/state/un-bien/proxy-identity.json` | This device's Ed25519 keypair |
-| `~/.local/state/un-bien/proxy-peers.json` | Remembered paired machines |
-| `~/.local/state/un-bien/proxy-relays.json` | Remembered relays |
+| Path                                         | Purpose                                        |
+| -------------------------------------------- | ---------------------------------------------- |
+| `~/.config/unbien-cli/settings.json`         | Client settings (theme, thinking, panel modes) |
+| `~/.local/state/un-bien/proxy-identity.json` | This device's Ed25519 keypair                  |
+| `~/.local/state/un-bien/proxy-peers.json`    | Remembered paired machines                     |
+| `~/.local/state/un-bien/proxy-relays.json`   | Remembered relays                              |
 
 MIT © George Harker.
