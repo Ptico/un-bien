@@ -79,7 +79,15 @@ final class MarkdownEntityStore {
         // HUD `t` gauge — a fully-warm scroll moves no OTHER prewarm token.
         // NOTE: rows with images but EMPTY text still warm (image decode) —
         // they just never enter the entity LRU.
-        var cold: [(key: String, id: String, text: String, images: [WireImage])] = []
+        /// A cold row ready for produce: cache key + row identity + payload.
+        /// (Struct over a 4-member tuple — lint + readability.)
+        struct ColdRow {
+            let key: String
+            let id: String
+            let text: String
+            let images: [WireImage]
+        }
+        var cold: [ColdRow] = []
         var touched = 0
         for row in rows where !row.text.isEmpty || !row.images.isEmpty {
             let key = Self.key(scope: scope, id: row.id, styleHash: style.hashValue)
@@ -93,7 +101,7 @@ final class MarkdownEntityStore {
                 }
                 continue
             }
-            cold.append((key: key, id: row.id, text: row.text, images: row.images))
+            cold.append(ColdRow(key: key, id: row.id, text: row.text, images: row.images))
         }
         if touched > 0 { RenderActivity.prewarmTouched = touched }
         // PASS 2 — PRODUCE the cold rows up to the in-flight cap (same priority
