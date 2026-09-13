@@ -4,6 +4,8 @@
 const COMMANDS = new Map([
   ["connect", () => import("./connect.js")],
   ["replay", () => import("./replay.js")],
+  ["pair", () => import("./pair.js")],
+  ["relay", () => import("./relay.js")],
 ])
 
 const [command] = process.argv.slice(2)
@@ -17,7 +19,9 @@ if (!load) {
   console.error(
     `usage: unbien [command] [options]\n\n` +
       "  connect   attach to a live pi session over the relay (default)\n" +
-      "  replay    render a captured envelope stream from a file\n\n" +
+      "  replay    render a captured envelope stream from a file\n" +
+      "  pair      pair with a machine (paste its unbien:// invite)\n" +
+      "  relay     manage remembered relays (add / remove / list)\n\n" +
       "run `unbien <command>` with no arguments for its options.",
   )
   process.exit(command ? 1 : 0)

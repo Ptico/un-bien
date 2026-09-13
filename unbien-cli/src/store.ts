@@ -39,3 +39,47 @@ export function rememberPeer(peer: PairedPeer, path = STORE_PATH): void {
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
   writeFileSync(path, JSON.stringify({ peers }, null, 2), { mode: 0o600 })
 }
+
+// ── Relay registry ─────────────────────────────────────────────────────────
+
+export interface RememberedRelay {
+  url: string
+  name: string
+  addedAt: string
+}
+
+const RELAYS_PATH = join(
+  homedir(),
+  ".local",
+  "state",
+  "un-bien",
+  "proxy-relays.json",
+)
+
+export function loadRelays(path = RELAYS_PATH): RememberedRelay[] {
+  try {
+    const parsed = JSON.parse(readFileSync(path, "utf8")) as {
+      relays?: RememberedRelay[]
+    }
+    return parsed.relays ?? []
+  } catch {
+    return []
+  }
+}
+
+export function rememberRelay(relay: RememberedRelay, path = RELAYS_PATH): void {
+  const relays = loadRelays(path).filter((r) => r.url !== relay.url)
+  relays.push(relay)
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
+  writeFileSync(path, JSON.stringify({ relays }, null, 2), { mode: 0o600 })
+}
+
+export function forgetRelay(urlOrName: string, path = RELAYS_PATH): boolean {
+  const relays = loadRelays(path)
+  const filtered = relays.filter(
+    (r) => r.url !== urlOrName && r.name !== urlOrName,
+  )
+  if (filtered.length === relays.length) return false
+  writeFileSync(path, JSON.stringify({ relays: filtered }, null, 2), { mode: 0o600 })
+  return true
+}
