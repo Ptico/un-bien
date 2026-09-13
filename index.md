@@ -58,4 +58,4 @@ by Jacob Moura (MIT); see the [README](README.md#attribution) for attribution.
 
 ## CLI
 
-**`unbien-cli`** — a terminal client for remote Pi sessions. [Docs](unbien-cli/README.md)
+**`unbien-cli`** — a terminal client for remote Pi sessions. [Docs](https://github.com/georgeharker/un-bien/tree/main/unbien-cli)
