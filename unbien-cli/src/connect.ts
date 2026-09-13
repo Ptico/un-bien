@@ -230,6 +230,31 @@ function hardQuit(reason: string): void {
 process.on("SIGINT", () => hardQuit("interrupted"))
 process.on("SIGTERM", () => hardQuit("terminated"))
 
+// UNCAUGHT/UNHANDLED SAFETY NET: an error thrown from an async event handler
+// (a relay frame that triggers an unhandled path — e.g. a mesh revocation
+// notification) kills the process with the terminal still in raw mode: no
+// echo, no cursor, Kitty protocol active. These handlers restore the terminal
+// before exiting, whatever went wrong. They are the LAST resort — everything
+// above tries to tear down cleanly first.
+function emergencyRestore(reason: string, err: unknown): void {
+  try {
+    if (shell) shell.quit()
+    else if (process.stdin.isTTY) process.stdin.setRawMode(false)
+  } catch {
+    /* terminal already gone */
+  }
+  process.stderr.write(
+    `\n[exit] ${reason}: ${err instanceof Error ? err.message : String(err)}\n`,
+  )
+  Shell.exitAfterDrain(1)
+}
+process.on("uncaughtException", (err) =>
+  emergencyRestore("uncaught exception", err),
+)
+process.on("unhandledRejection", (reason) =>
+  emergencyRestore("unhandled rejection", reason),
+)
+
 const debug = flags.has("debug")
 function trace(direction: string, detail: string): void {
   if (debug) process.stderr.write(`[${direction}] ${detail}\n`)
@@ -424,17 +449,17 @@ function wireClient(c: SessionClient): void {
       console.error(
         `[pair failed] ${String(frame.message ?? frame.code ?? "")}`,
       )
-      process.exit(1)
+      Shell.exitAfterDrain(1)
     }
     if (frame.type === "error" && frame.code === "unknown_peer") {
       console.error("[not paired] run `/unbien pair` and pass the new invite.")
-      process.exit(1)
+      Shell.exitAfterDrain(1)
     }
   })
 
   c.on("close", () => {
     console.error("[relay] connection closed")
-    process.exit(1)
+    Shell.exitAfterDrain(1)
   })
 }
 wireClient(client)
@@ -718,7 +743,7 @@ function commandContext(): CommandContext {
     },
     settingsPath: settingsPath(),
     print: emit,
-    quit: () => (shell ? shell.quit() : process.exit(0)),
+    quit: () => (shell ? shell.quit() : Shell.exitAfterDrain(0)),
     choose: (title, items) =>
       shell ? shell.choose(title, items) : (items[0] ?? null),
     chooseAction: (title, items, hint, keys) =>
