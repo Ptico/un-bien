@@ -528,7 +528,10 @@ if (multiRelay) {
   clientsByRelay = result.clients
   // Close the non-chosen relay clients after picking (below).
 } else {
-  await client.connect()
+  // NOTE: client.connect() was ALREADY called above (line ~497) — the
+  // single-relay path reuses that connection. Calling it again would
+  // register duplicate message handlers (every envelope processed twice:
+  // the duplicate-transcript + relay-wedge bug).
   const rooms = await client.listRooms()
   const label = relayLabelFor(relayUrl)
   choices = rooms.map((room) => ({ ...room, relayUrl, relayLabel: label }))
