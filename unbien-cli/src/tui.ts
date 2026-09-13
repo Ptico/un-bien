@@ -111,6 +111,13 @@ export class Shell {
       (s) => theme.fg("muted", s),
       "",
     )
+    // LOADER VISIBILITY FIX: the constructor's setIndicator() call invokes
+    // start() → updateDisplay() which renders the spinner frame (⠋) even with
+    // an empty message — the spinner is visible from construction. Clear the
+    // text directly to hide it; setStatus brings it back on the first
+    // working=true.
+    this.working.setText("")
+    this.working.stop()
     this.tui.addChild(this.transcript)
     this.tui.addChild(this.notes)
     this.tui.addChild(this.live)
@@ -201,17 +208,23 @@ export class Shell {
   setStatus(patch: Partial<ShellStatus>): void {
     this.status = { ...this.status, ...patch }
     // The spinner animates only while the agent is working; leaving it running
-    // costs a repaint every frame for no information.
+    // costs a repaint every frame for no information. LOADER VISIBILITY FIX:
+    // stop() alone only stops the interval — the LAST RENDERED FRAME (⠋ etc.)
+    // stays on screen. Clear the text directly to hide it.
     const working = this.status.working === true
     if (working !== this.isWorking) {
       this.isWorking = working
       if (working) {
         this.working.start()
+        this.working.setMessage(this.status.activity ?? "working")
       } else {
         this.working.stop()
+        this.working.setText("")
       }
+    } else if (working) {
+      // Same busy state, different activity label — just update the message
+      this.working.setMessage(this.status.activity ?? "working")
     }
-    this.working.setMessage(working ? (this.status.activity ?? "working") : "")
     this.footer.setText(this.renderFooter())
     this.tui.requestRender()
   }
