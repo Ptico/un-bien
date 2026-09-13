@@ -55,3 +55,7 @@ multiple Pi sessions on your machines can discover and message each other.
 
 Un Bien is derived from [remote-pi](https://github.com/jacobaraujo7/remote_pi)
 by Jacob Moura (MIT); see the [README](README.md#attribution) for attribution.
+
+## CLI
+
+**`unbien-cli`** — a terminal client for remote Pi sessions. [Docs](unbien-cli/README.md)

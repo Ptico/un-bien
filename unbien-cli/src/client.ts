@@ -206,6 +206,13 @@ export class SessionClient extends EventEmitter<SessionClientEvents> {
     this.sendEnvelope({ rpc: { type: "steer", id: randomUUID(), message } })
   }
 
+  /** Queue a message to run AFTER the current turn ends (followUp). */
+  queue(message: string): void {
+    this.sendEnvelope({
+      rpc: { type: "prompt", id: randomUUID(), message, streamingBehavior: "followUp" },
+    })
+  }
+
   abort(): void {
     this.sendEnvelope({ rpc: { type: "abort", id: randomUUID() } })
   }

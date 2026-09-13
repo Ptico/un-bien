@@ -837,11 +837,33 @@ async function submit(text: string): Promise<void> {
     return
   }
 
-  if (text.startsWith("/steer ")) client.steer(text.slice(7))
-  else if (text.startsWith("/")) emit([`  unknown command: ${text}`])
+  // /queue: followUp semantics — queues until the turn ends, then runs fresh
+  if (text.startsWith("/queue ")) {
+    const queued = text.slice(7)
+    if (!queued.trim()) {
+      emit(["  usage: /queue <text> — queues until the current turn ends"])
+      return
+    }
+    trace("out", `queue room=${client.room} chars=${queued.length}`)
+    client.queue(queued)
+    emit([`  ⏳ queued: ${queued.slice(0, 60)}${queued.length > 60 ? "…" : ""}`])
+    return
+  }
+
+  if (text.startsWith("/")) emit([`  unknown command: ${text}`])
   else {
-    trace("out", `prompt room=${client.room} chars=${text.length}`)
-    client.prompt(text)
+    // BUSY-AWARE ROUTING (matches the app): while the agent is working, a
+    // typed prompt STEERS into the running turn (mid-turn injection); when
+    // idle, it starts a fresh turn. The user never picks the verb — the
+    // busy state (the same signal that drives the spinner) routes it.
+    if (shell?.status.working) {
+      trace("out", `steer room=${client.room} chars=${text.length}`)
+      client.steer(text)
+      emit([`  → steering: ${text.slice(0, 60)}${text.length > 60 ? "…" : ""}`])
+    } else {
+      trace("out", `prompt room=${client.room} chars=${text.length}`)
+      client.prompt(text)
+    }
   }
 }
 

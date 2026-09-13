@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/georgeharker/un-bien/main/app/icons/un-bien-macos-1024.png" alt="Un Bien" width="96" />
+  <img src="../docs/images/icon-192.png" alt="Un Bien" width="96" />
 </p>
 
 # unbien-cli
@@ -109,10 +109,17 @@ Once connected, the prompt accepts slash commands:
 | `/compact`           | Compact the session context                                                   |
 | `/abort`             | Abort the current turn                                                        |
 | `/set <key> <value>` | Client settings (e.g. `/set streamThinking on`)                               |
-| `/steer <text>`      | Send a steering message mid-turn                                              |
+| `/queue <text>`      | Queue a message to run after the current turn ends                            |
 | `/quit`              | Detach; the remote session keeps running                                      |
 
 Ctrl-C exits (the terminal is restored cleanly). Ctrl-D also exits.
+
+### Busy-state routing
+
+Typing while the agent is working **steers** into the running turn (mid-turn
+injection). Typing while idle starts a fresh turn. You never pick the verb;
+the CLI routes based on the same busy signal that drives the spinner. Use
+`/queue <text>` when you want the message to wait until the turn ends.
 
 ## Offline rendering
 

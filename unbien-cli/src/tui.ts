@@ -87,7 +87,7 @@ export class Shell {
    * erase anything a command had printed.
    */
   private readonly notes = new Lines()
-  private status: ShellStatus
+  status: ShellStatus
   /** A modal chooser owns input while open, so the editor must not also see it. */
   private overlay: SelectList | null = null
 
