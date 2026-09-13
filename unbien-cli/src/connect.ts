@@ -289,24 +289,39 @@ function emit(lines: readonly string[]): void {
 // repaints, and keystrokes all queue behind a synchronous render cascade.
 // This coalesces to AT MOST one render per event-loop turn (setImmediate
 // fires after I/O, unlike process.nextTick which runs before it).
+// WINDOWED DRAW (the O(n) fix): renderTranscript + setTranscript were O(n)
+// per draw — for long sessions, every streaming delta re-rendered the entire
+// conversation. Two caps:
+//   1. ITEM WINDOW: only the last DRAW_ITEM_WINDOW items go to renderTranscript
+//      (the TUI scrolls from the bottom; anything above ~10 screens is wasted)
+//   2. LINE CAP: the rendered lines are capped to DRAW_LINE_CAP for the TUI
+// The reduce is still O(n) but it's a cheap loop — the RENDER was the cost.
+const DRAW_ITEM_WINDOW = 80
+const DRAW_LINE_CAP = 2_000
 let drawPending = false
 function draw(): void {
   if (drawPending) return
   drawPending = true
   setImmediate(() => {
     drawPending = false
+    const items = reduce(seen)
+    // WINDOW: the TUI shows the bottom — older items are dead render cost
+    const windowed = items.length > DRAW_ITEM_WINDOW
+      ? items.slice(-DRAW_ITEM_WINDOW)
+      : items
     const lines = renderTranscript(
-      reduce(seen),
+      windowed,
       width,
       cwd,
       !settings.showThinking,
     )
+    const capped = lines.length > DRAW_LINE_CAP
+      ? lines.slice(-DRAW_LINE_CAP)
+      : lines
     if (shell) {
-      // The shell owns the screen, so hand it the whole transcript: history
-      // replay re-reduces from scratch and would otherwise duplicate rows.
-      shell.setTranscript(lines)
+      shell.setTranscript(capped)
     } else {
-      for (const line of lines.slice(drawn)) console.log(line)
+      for (const line of capped.slice(Math.max(0, drawn - (lines.length - capped.length))) ) console.log(line)
     }
     drawn = lines.length
   })
