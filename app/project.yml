@@ -78,6 +78,11 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.georgeharker.un-bien.app
         GENERATE_INFOPLIST_FILE: "NO"
         TARGETED_DEVICE_FAMILY: "1,2"
+        # The bundle FILENAME is the device-displayed name on macOS
+        # (Guideline 5.2.5: the .app must not contain "macOS").
+        PRODUCT_NAME: Un Bien
+        # Module name stays the XcodeGen default, so imports don't shift.
+        PRODUCT_MODULE_NAME: UnBien
         SWIFT_VERSION: "6.0"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # Pinned here (the source of truth) so `xcodegen generate` doesn't wipe
@@ -106,7 +111,7 @@ targets:
       path: App/macOS/Info.plist
       properties:
         CFBundleDisplayName: Un Bien
-        LSMinimumSystemVersion: "14.0"
+        LSMinimumSystemVersion: "15.0"
         NSCameraUsageDescription: Scan a pairing QR code.
         CFBundleURLTypes:
           - CFBundleURLName: com.georgeharker.un-bien.pair
@@ -142,6 +147,11 @@ targets:
         GENERATE_INFOPLIST_FILE: "NO"
         SWIFT_VERSION: "6.0"
         ENABLE_HARDENED_RUNTIME: "YES"
+        # The bundle FILENAME is the device-displayed name on macOS
+        # (Guideline 5.2.5: the .app must not contain "macOS").
+        PRODUCT_NAME: Un Bien
+        # Module name stays the XcodeGen default, so imports don't shift.
+        PRODUCT_MODULE_NAME: UnBien
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: B8V3694RNX

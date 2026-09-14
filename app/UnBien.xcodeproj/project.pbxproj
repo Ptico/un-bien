@@ -433,6 +433,8 @@
 					"@executable_path/../Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "com.georgeharker.un-bien.app";
+				PRODUCT_MODULE_NAME = UnBien;
+				PRODUCT_NAME = "Un Bien";
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG UNBIEN_DIAGNOSTICS";
 				SWIFT_VERSION = 6.0;
@@ -455,6 +457,8 @@
 					"@executable_path/../Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "com.georgeharker.un-bien.app";
+				PRODUCT_MODULE_NAME = UnBien;
+				PRODUCT_NAME = "Un Bien";
 				SDKROOT = macosx;
 				SWIFT_VERSION = 6.0;
 			};
@@ -475,6 +479,8 @@
 					"@executable_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "com.georgeharker.un-bien.app";
+				PRODUCT_MODULE_NAME = UnBien;
+				PRODUCT_NAME = "Un Bien";
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG UNBIEN_DIAGNOSTICS";
 				SWIFT_VERSION = 6.0;
@@ -497,6 +503,8 @@
 					"@executable_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "com.georgeharker.un-bien.app";
+				PRODUCT_MODULE_NAME = UnBien;
+				PRODUCT_NAME = "Un Bien";
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
