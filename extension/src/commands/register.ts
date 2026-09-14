@@ -131,10 +131,29 @@ export function registerUnbienCommands(
         await deps.renameAgent(sub.slice("rename".length).trim())
       } else if (sub === "peers") {
         await _cmdPeers(deps, ctx)
-      } else if (sub === "install") {
-        _cmdInstall(ctx, { linkCli: true })
-      } else if (sub === "uninstall") {
-        _cmdUninstall(ctx, { linkCli: true })
+      } else if (sub === "install" || sub.startsWith("install ")) {
+        // The ROOT command is what the TUI actually routes /unbien install
+        // through (the nested "unbien install" registration only serves the
+        // command palette) — target parsing must live HERE.
+        const target = parseInstallTarget(sub.slice("install".length).trim())
+        if (!target) {
+          ctx.ui.notify(
+            "[un-bien] unknown install target. Use: /unbien install [relay|launcher|cli|all]",
+            "error",
+          )
+        } else {
+          await _cmdInstallTarget(ctx, target, { linkCli: true })
+        }
+      } else if (sub === "uninstall" || sub.startsWith("uninstall ")) {
+        const target = parseInstallTarget(sub.slice("uninstall".length).trim())
+        if (!target) {
+          ctx.ui.notify(
+            "[un-bien] unknown uninstall target. Use: /unbien uninstall [relay|launcher|all]",
+            "error",
+          )
+        } else {
+          await _cmdUninstallTarget(ctx, target, { linkCli: true })
+        }
       } else if (sub === "fork" || sub.startsWith("fork ")) {
         await _cmdFork(deps, sub.slice("fork".length).trim(), ctx)
       } else if (sub === "branch" || sub.startsWith("branch ")) {
