@@ -172,6 +172,36 @@ export function launcherLogPath(): string {
   return join(unbienStateHome(), "launcher.log")
 }
 
+// ── UNBIEN_* env passthrough ───────────────────────────────────────────────
+
+function xmlEscape(v: string): string {
+  return v
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+}
+
+/** Every `UNBIEN_*` variable in the installing environment, as plist
+ *  `<key>/<string>` pairs (indented to sit inside EnvironmentVariables). */
+export function renderUnbienEnvPlist(): string {
+  return Object.entries(process.env)
+    .filter(([k]) => k.startsWith("UNBIEN_"))
+    .map(
+      ([k, v]) =>
+        `    <key>${xmlEscape(k)}</key>\n    <string>${xmlEscape(String(v))}</string>`,
+    )
+    .join("\n")
+}
+
+/** Same, as systemd `Environment="K=V"` lines (indented for the unit). */
+export function renderUnbienEnvSystemd(): string {
+  return Object.entries(process.env)
+    .filter(([k]) => k.startsWith("UNBIEN_"))
+    .map(([k, v]) => `Environment="${k}=${String(v).replaceAll('"', '\\"')}"`)
+    .join("\n")
+}
+
 // ── Template rendering ─────────────────────────────────────────────────────
 
 export interface RenderVars {
@@ -189,6 +219,12 @@ export interface RenderVars {
   /** Windows only: combined stdout/stderr log the hidden launcher daemon
    *  appends to. Empty on POSIX (templates ignore `{LOG}`). */
   logPath: string
+  /** PI agent config dir snapshot (see defaultRenderVars). */
+  piAgentDir: string
+  /** Pre-rendered UNBIEN_* env entries, plist XML form. */
+  unbienEnvPlist: string
+  /** Pre-rendered UNBIEN_* env entries, systemd unit form. */
+  unbienEnvSystemd: string
 }
 
 export function defaultRenderVars(): RenderVars {
@@ -200,6 +236,17 @@ export function defaultRenderVars(): RenderVars {
     path: process.env["PATH"] ?? "/usr/local/bin:/usr/bin:/bin",
     vbs: vbsLauncherPath(),
     logPath: launcherLogPath(),
+    // The daemon resolves config the way the user's terminal does: snapshot
+    // the installing shell's PI agent dir (launchd/systemd envs are sparse
+    // and would otherwise fall back to ~/.pi and find nothing).
+    piAgentDir:
+      process.env["PI_CODING_AGENT_DIR"] ??
+      join(homedir(), ".config", "pi", "agent"),
+    // Pre-rendered <key>/<string> pairs for every UNBIEN_* var in the
+    // installing environment (relay URL, state dir overrides, …) so the
+    // services see the same config resolution as the user's shell.
+    unbienEnvPlist: renderUnbienEnvPlist(),
+    unbienEnvSystemd: renderUnbienEnvSystemd(),
   }
 }
 
@@ -213,6 +260,9 @@ export function renderTemplate(template: string, vars: RenderVars): string {
     .replace(/\{PATH\}/g, vars.path)
     .replace(/\{VBS\}/g, vars.vbs)
     .replace(/\{LOG\}/g, vars.logPath)
+    .replace(/\{PI_AGENT_DIR\}/g, vars.piAgentDir)
+    .replace(/\{UNBIEN_ENV_PLIST\}/g, vars.unbienEnvPlist)
+    .replace(/\{UNBIEN_ENV_SYSTEMD\}/g, vars.unbienEnvSystemd)
 }
 
 // ── Install / uninstall API ────────────────────────────────────────────────

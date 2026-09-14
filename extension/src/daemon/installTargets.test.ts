@@ -49,6 +49,10 @@ const relayVars: RelayRenderVars = {
   relayBin: "/Users/tester/.cargo/bin/unbien-relay",
   port: 3000,
   home: "/Users/tester",
+  logPath: "/Users/tester/.local/state/un-bien/relay.log",
+  piAgentDir: "/Users/tester/.config/pi/agent",
+  unbienEnvPlist: "",
+  unbienEnvSystemd: "",
 }
 
 describe("renderRelayTemplate", () => {

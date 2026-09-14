@@ -24,6 +24,7 @@
 
 import { execFile, execFileSync } from "node:child_process"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { renderUnbienEnvPlist, renderUnbienEnvSystemd } from "./install.js"
 import { dirname, join } from "node:path"
 import { userInfo } from "node:os"
 import { homedir } from "node:os"
@@ -145,6 +146,12 @@ export interface RelayRenderVars {
   relayBin: string
   port: number
   home: string
+  logPath: string
+  /** PI agent config dir — keeps env shape symmetric with the launcher's. */
+  piAgentDir: string
+  /** Pre-rendered UNBIEN_* env entries (see install.ts helpers). */
+  unbienEnvPlist: string
+  unbienEnvSystemd: string
 }
 
 export function renderRelayTemplate(
@@ -155,6 +162,10 @@ export function renderRelayTemplate(
     .replace(/\{RELAY_BIN\}/g, vars.relayBin)
     .replace(/\{PORT\}/g, String(vars.port))
     .replace(/\{HOME\}/g, vars.home)
+    .replace(/\{LOG\}/g, vars.logPath)
+    .replace(/\{PI_AGENT_DIR\}/g, vars.piAgentDir)
+    .replace(/\{UNBIEN_ENV_PLIST\}/g, vars.unbienEnvPlist)
+    .replace(/\{UNBIEN_ENV_SYSTEMD\}/g, vars.unbienEnvSystemd)
 }
 
 function relayTemplatePath(kind: "launchd" | "systemd"): string {
@@ -227,6 +238,15 @@ export async function installRelayService(opts: {
     relayBin: binary.path,
     port,
     home: homedir(),
+    logPath: relayLogPath(),
+    // Snapshot the installing shell's PI agent dir so the service resolves
+    // config the same way the user's terminal does (launchd's env is sparse
+    // and would otherwise fall back to ~/.pi).
+    piAgentDir:
+      process.env.PI_CODING_AGENT_DIR ??
+      join(homedir(), ".config", "pi", "agent"),
+    unbienEnvPlist: renderUnbienEnvPlist(),
+    unbienEnvSystemd: renderUnbienEnvSystemd(),
   }
   const tplPath = relayTemplatePath(
     platform === "macos" ? "launchd" : "systemd",

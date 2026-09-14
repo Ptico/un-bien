@@ -126,6 +126,9 @@ describe("renderTemplate", () => {
     path: "/usr/local/bin:/usr/bin:/bin",
     vbs: "/Users/x/.local/state/un-bien/RemotePiLauncherRun.vbs",
     logPath: "/Users/x/.local/state/un-bien/launcher.log",
+    piAgentDir: "/Users/x/.config/pi/agent",
+    unbienEnvPlist: "",
+    unbienEnvSystemd: "",
   }
 
   test("substitutes every placeholder in systemd template", () => {

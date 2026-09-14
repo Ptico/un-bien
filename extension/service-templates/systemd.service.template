@@ -15,6 +15,8 @@ StandardError=journal
 # (npm-global / Homebrew / etc.).
 Environment="PATH={PATH}"
 Environment="HOME={HOME}"
+Environment="PI_CODING_AGENT_DIR={PI_AGENT_DIR}"
+{UNBIEN_ENV_SYSTEMD}
 
 [Install]
 WantedBy=default.target
