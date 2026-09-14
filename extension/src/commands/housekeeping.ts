@@ -19,6 +19,11 @@ import {
   unlinkCliBinaries,
 } from "../daemon/install.js"
 import {
+  installRelayService,
+  uninstallRelayService,
+} from "../daemon/relayService.js"
+import { installCliPackage } from "../daemon/cliInstall.js"
+import {
   defaultAgentName,
   localConfigExists,
   saveLocalConfig,
@@ -124,6 +129,106 @@ export function _cmdUninstall(
     ctx.ui.notify(sections.join("\n"), "info")
   } catch (err) {
     ctx.ui.notify(`[un-bien] uninstall failed: ${String(err)}`, "error")
+  }
+}
+
+// ── Component install dispatch (relay / launcher / cli / all) ──────────────
+
+export type InstallTarget = "launcher" | "relay" | "cli" | "all"
+
+export function parseInstallTarget(raw: string): InstallTarget | null {
+  const t = raw.trim().toLowerCase()
+  if (t === "" || t === "all") return "all"
+  if (t === "launcher" || t === "daemon" || t === "service") return "launcher"
+  if (t === "relay") return "relay"
+  if (t === "cli") return "cli"
+  return null
+}
+
+/** Install one or all un-bien components. Async: relay/cli installs spawn
+ *  package managers (cargo/npm) that take minutes. Reports each component's
+ *  outcome; returns true only if every attempted component succeeded. */
+export async function _cmdInstallTarget(
+  ctx: Pick<ExtensionContext, "ui">,
+  target: InstallTarget,
+  opts: { linkCli?: boolean } = {},
+): Promise<boolean> {
+  const linkCli = opts.linkCli ?? false
+  const results: string[] = []
+  let ok = true
+
+  const want =
+    target === "all"
+      ? (["relay", "launcher", "cli"] as const)
+      : ([target] as const)
+
+  for (const component of want) {
+    if (component === "launcher") {
+      // Reuses the sync path: the launcher unit render + bootstrap is local
+      // and fast (no package manager involved).
+      const done = _cmdInstall(ctx, { linkCli })
+      ok = ok && done
+      continue
+    }
+    try {
+      if (component === "relay") {
+        ctx.ui.notify("[un-bien] installing relay service…", "info")
+        const r = await installRelayService({
+          autoInstall: true,
+          onLog: (l) => results.push(`  [relay] ${l}`),
+        })
+        results.push(
+          `[un-bien] Relay service installed (${r.platform}).`,
+          `  Unit: ${r.unitPath}`,
+          `  Binary: ${r.binary}`,
+          `  Port: ${r.port} (ws://<host>:${r.port})`,
+        )
+      } else if (component === "cli") {
+        ctx.ui.notify(
+          "[un-bien] installing the unbien CLI (npm install -g)…",
+          "info",
+        )
+        const r = await installCliPackage((l) => results.push(`  [cli] ${l}`))
+        results.push(
+          `[un-bien] CLI installed${r.version ? ` (unbien ${r.version})` : ""}.`,
+        )
+      }
+    } catch (err) {
+      ok = false
+      results.push(`[un-bien] ${component} install failed: ${String(err)}`)
+    }
+  }
+
+  if (results.length > 0) ctx.ui.notify(results.join("\n"), "info")
+  return ok
+}
+
+/** Uninstall counterpart: relay service + launcher service + CLI shims. */
+export async function _cmdUninstallTarget(
+  ctx: Pick<ExtensionContext, "ui">,
+  target: InstallTarget,
+  opts: { linkCli?: boolean } = {},
+): Promise<void> {
+  const want =
+    target === "all"
+      ? (["relay", "launcher"] as const)
+      : ([target] as const)
+
+  if (want.includes("launcher")) _cmdUninstall(ctx, opts)
+  if (want.includes("relay")) {
+    try {
+      const r = await uninstallRelayService()
+      ctx.ui.notify(
+        [
+          `[un-bien] Relay service uninstalled (${r.removed ? "removed" : "not present"}).`,
+          `  Unit: ${r.unitPath}`,
+          `  Steps:\n${r.log.map((l) => "    " + l).join("\n")}`,
+        ].join("\n"),
+        "info",
+      )
+    } catch (err) {
+      ctx.ui.notify(`[un-bien] relay uninstall failed: ${String(err)}`, "error")
+    }
   }
 }
 

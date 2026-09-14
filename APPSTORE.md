@@ -17,7 +17,9 @@ Legend: ✅ done · ⚠️ gap · 🔲 to do.
 - ✅ `NSCameraUsageDescription` (QR pairing scan) in both Info.plists.
 - ✅ Keychain-access-group entitlement on both platforms (Owner-key custody).
 - ✅ macOS hardened runtime on; universal iOS (`TARGETED_DEVICE_FAMILY 1,2`).
-- ✅ Deployment targets: iOS 17, macOS 14.
+- ✅ Deployment targets: iOS 18, macOS 15 (`ScrollPhase` /
+  `onScrollGeometryChange` are macOS 15 / iOS 18 only and unguarded — dropping
+  the floor does not compile).
 
 ## Blockers — App Review rejects without these
 

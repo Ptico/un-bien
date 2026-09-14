@@ -21,6 +21,11 @@ import { _cmdBranch, _cmdFork, _cmdNewSession } from "./session_ops.js"
 import { _cmdPair, _cmdRevoke, _shortidCompletions } from "./pairing.js"
 import { _cmdRelay, _cmdSetRelay } from "./relay.js"
 import { _cmdInstall, _cmdUninstall } from "./housekeeping.js"
+import {
+  _cmdInstallTarget,
+  _cmdUninstallTarget,
+  parseInstallTarget,
+} from "./housekeeping.js"
 
 export function registerUnbienCommands(
   pi: ExtensionAPI,
@@ -260,16 +265,32 @@ export function registerUnbienCommands(
   // Service install / uninstall — the launcher daemon as a system service.
   pi.registerCommand("unbien install", {
     description:
-      "Install the un-bien launcher daemon as a system service + link the un-bien CLI (systemd/launchd/Task Scheduler; Windows prompts for admin)",
-    handler: async (_, ctx) => {
-      _cmdInstall(ctx, { linkCli: true })
+      "Install un-bien components as user services: bare or 'all' = relay + launcher + CLI; also 'relay', 'launcher', or 'cli' individually",
+    handler: async (args, ctx) => {
+      const target = parseInstallTarget(args ?? "")
+      if (!target) {
+        ctx.ui.notify(
+          "[un-bien] unknown install target. Use: /unbien install [relay|launcher|cli|all]",
+          "error",
+        )
+        return
+      }
+      await _cmdInstallTarget(ctx, target, { linkCli: true })
     },
   })
   pi.registerCommand("unbien uninstall", {
     description:
-      "Remove the un-bien launcher daemon system service + the CLI shims (Windows prompts for admin)",
-    handler: async (_, ctx) => {
-      _cmdUninstall(ctx, { linkCli: true })
+      "Remove un-bien services: bare or 'all' = relay + launcher + CLI shims; also 'relay' or 'launcher' individually",
+    handler: async (args, ctx) => {
+      const target = parseInstallTarget(args ?? "")
+      if (!target) {
+        ctx.ui.notify(
+          "[un-bien] unknown uninstall target. Use: /unbien uninstall [relay|launcher|all]",
+          "error",
+        )
+        return
+      }
+      await _cmdUninstallTarget(ctx, target, { linkCli: true })
     },
   })
 }

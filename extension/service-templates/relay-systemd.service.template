@@ -1,0 +1,17 @@
+[Unit]
+Description=un-bien relay
+Documentation=https://docs.georgeharker.com/un-bien
+After=default.target
+
+[Service]
+Type=simple
+ExecStart={RELAY_BIN}
+Restart=on-failure
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+Environment="UNBIEN_RELAY_PORT={PORT}"
+Environment="HOME={HOME}"
+
+[Install]
+WantedBy=default.target

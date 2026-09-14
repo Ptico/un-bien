@@ -43,6 +43,6 @@ launch request.
 | Document                                             | What it covers                                                                                                                                     |
 | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [Install & setup](install.md#build--install-the-app) | Building the iOS/macOS app with Xcode + XcodeGen, and standing up the relay.                                                                       |
-| [Deployment & signing](../DEPLOY.md)                 | Signing, entitlements, and the Info.plist checklist for a shippable app target (iCloud Keychain sync, macOS network-client sandbox, camera usage). |
-| [Feature test drive](../TESTING.md)                  | Exercising the features by hand end to end.                                                                                                        |
+| [App Store release checklist](../APPSTORE.md)      | The submission checklist — screenshots, review notes, signing. (Not rendered on the docs site.) |
+
 | [Self-host the relay](../relay/README.md)            | The relay's own build, environment variables, mesh endpoint, and reverse-proxy setup.                                                              |

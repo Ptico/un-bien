@@ -117,6 +117,9 @@ import {
   _cmdClaudeCli,
   _cmdInstall,
   _cmdUninstall,
+  _cmdInstallTarget,
+  _cmdUninstallTarget,
+  parseInstallTarget,
   _deployAgentNetworkSkill,
 } from "./commands/housekeeping.js"
 import { registerUnbienCommands } from "./commands/register.js"
@@ -3052,19 +3055,33 @@ if (_isDirectRun()) {
     // `linkCli: false` so we never stomp those with symlinks pointing at a
     // parallel Pi-extension install.
     const stubCtx = { ui: _cliStubUi() }
-    // Propagate failure as a non-zero exit so callers (Cockpit / CI) detect it
-    // — installService throws on a failed schtasks/launchctl/systemctl step.
-    if (!_cmdInstall(stubCtx, { linkCli: false })) process.exit(1)
+    // Component targets: `unbien-admin install [relay|launcher|cli|all]`.
+    // Bare = all (same as the slash command).
+    const target = parseInstallTarget(cliArgs[0] ?? "")
+    if (!target) {
+      console.error(
+        "unknown install target — use: unbien-admin install [relay|launcher|cli|all]",
+      )
+      process.exit(2)
+    }
+    // Relay/CLI installs spawn package managers (async); await before exit.
+    // Propagate failure as a non-zero exit so callers (Cockpit / CI) detect it.
+    // eslint-disable-next-line no-async-promise-executor
+    await _cmdInstallTarget(stubCtx, target, { linkCli: false }).then(
+      (ok) => {
+        if (!ok) process.exit(1)
+      },
+    )
   } else if (subcmd === "uninstall") {
     const stubCtx = { ui: _cliStubUi() }
-    // `linkCli: true` even from the CLI: unlinking is ALWAYS safe and must run
-    // regardless of how install ran. `unlinkCliBinaries` only removes OUR
-    // reserved `un-bien` symlink under `~/.local/bin`; npm-global bins live in
-    // a different prefix and are never touched. So a user who installed via the
-    // TUI (`/unbien install`, which links) and uninstalls from a shell still
-    // gets the link cleaned up — the asymmetry that left an orphaned
-    // `~/.local/bin/unbien` behind.
-    _cmdUninstall(stubCtx, { linkCli: true })
+    const target = parseInstallTarget(cliArgs[0] ?? "")
+    if (!target) {
+      console.error(
+        "unknown uninstall target — use: unbien-admin uninstall [relay|launcher|all]",
+      )
+      process.exit(2)
+    }
+    await _cmdUninstallTarget(stubCtx, target, { linkCli: true })
   } else {
     console.log(
       [

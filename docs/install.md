@@ -2,16 +2,22 @@
 title: "Install & setup"
 ---
 
-Un Bien is three pieces that work together:
+Un Bien is five pieces that work together:
 
 - the **Pi extension** — adds `/unbien`, the agent mesh, and relay connectivity
   to your terminal Pi sessions;
 - the **relay** — a small WebSocket server you host, the meeting point between
   your machine and your phone;
-- the **app** — the native iOS/macOS client that drives Pi from your phone.
+- the **app** — the native iOS/macOS client that drives Pi from your phone;
+- the **unbien-launcher** — an optional machine daemon so the app can start Pi
+  sessions even when no Pi is running;
+- the **CLI** — an optional terminal client (`unbien`) that attaches to sessions
+  from any shell, without the app.
 
 A typical setup is: **stand up a relay**, **install the extension** and point it
 at that relay, then **build/install the app** and pair it. Do them in that order.
+The optional launcher and CLI install in one command later
+(`/unbien install all`).
 
 > **There is no default relay.** Un Bien ships pointing at nobody's
 > infrastructure — you must run your own (or point at one you trust) before the
@@ -108,20 +114,37 @@ the tailnet is already encrypted (WireGuard), so plain `http://` is fine here;
 TLS is only needed if you ever expose the relay beyond the tailnet (see
 [TLS](#tls-production)).
 
-**2. Build and install the relay on the host** (needs a Rust toolchain):
+**2. Install the relay on the host.** The one-command path (needs the un-bien
+extension on the host — or use the standalone `unbien-admin` CLI):
 
 ```bash
-git clone https://github.com/georgeharker/un-bien
-cd un-bien/relay
-cargo build --release
-install -m 755 target/release/un-bien-relay ~/.local/bin/
+# From a terminal on the relay host, with the extension installed:
+cargo install un-bien-relay   # compiles the binary (a few minutes)
 ```
 
-State (the membership DB `mesh.db` and `relay.log`) defaults to
-`~/.local/state/un-bien/` on the host — relocate with `UNBIEN_STATE_DIR` (see
-[relay environment variables](#relay-environment-variables)).
+Then from inside `pi` on that host (or via `unbien-admin install relay`):
 
-**3. Keep the relay running as a service.**
+```text
+/unbien install relay
+```
+
+That writes and activates the user-level service —
+`~/.config/systemd/user/unbien-relay.service` (Linux) or
+`~/Library/LaunchAgents/dev.unbien.relay.plist` (macOS) — pinning `HOME` so the
+relay's state root (`~/.local/state/un-bien/`, relocate with
+`UNBIEN_STATE_DIR`) resolves under the service manager's sparse environment.
+If the binary isn't found it offers a `cargo install un-bien-relay` compile.
+Verify:
+
+```bash
+curl -s http://localhost:3000/health   # → 200 OK
+```
+
+On a headless Linux box also run `loginctl enable-linger "$USER"` so the user
+service survives logout.
+
+<details>
+<summary>Manual unit setup (what <code>/unbien install relay</code> automates)</summary>
 
 Linux — `~/.config/systemd/user/unbien-relay.service`:
 
@@ -131,7 +154,7 @@ Description=Un Bien relay
 After=network-online.target
 
 [Service]
-ExecStart=%h/.local/bin/un-bien-relay
+ExecStart=%h/.cargo/bin/unbien-relay
 Restart=on-failure
 RestartSec=5s
 Environment=RUST_LOG=info
@@ -143,8 +166,6 @@ WantedBy=default.target
 ```bash
 systemctl --user daemon-reload
 systemctl --user enable --now unbien-relay.service
-loginctl enable-linger "$USER"    # headless boxes: keep user services after logout
-curl -s http://localhost:3000/health   # → 200 OK
 ```
 
 macOS — `~/Library/LaunchAgents/dev.unbien.relay.plist` (replace `YOU` with
@@ -157,7 +178,7 @@ your username):
 <dict>
   <key>Label</key><string>dev.unbien.relay</string>
   <key>ProgramArguments</key>
-  <array><string>/Users/YOU/.local/bin/un-bien-relay</string></array>
+  <array><string>/Users/YOU/.cargo/bin/un-bien-relay</string></array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>StandardOutPath</key><string>/Users/YOU/.local/state/un-bien/relay.log</string>
@@ -168,10 +189,11 @@ your username):
 
 ```bash
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.unbien.relay.plist
-curl -s http://localhost:3000/health   # → 200 OK
 ```
 
-**4. Working machine — extension + launcher service.** Same base steps as the
+</details>
+
+**4. Working machine — extension + everything else.** Same base steps as the
 [Quickstart](#quickstart): install Pi and the extension, `/login` + `/model`,
 then point un-bien at the relay (now via its tailnet name):
 
@@ -186,16 +208,22 @@ pi install npm:@geohar/un-bien
 /unbien pair    # QR for the app (scan it in step 6)
 ```
 
-Then install the **unbien-launcher** as a login service so the machine is
-reachable for remote launches even when no Pi is running:
+Then install the **launcher** as a login service (and optionally the CLI) so
+the machine is reachable for remote launches even when no Pi is running —
+from inside `pi`:
+
+```text
+/unbien install launcher    # or: /unbien install all  (launcher + relay-host bits + CLI)
+```
+
+…or from a shell, via the standalone admin CLI:
 
 ```bash
 npm install -g @geohar/un-bien    # puts the `unbien-admin` CLI on PATH
-unbien-admin install                    # systemd --user (Linux) / launchd (macOS)
+unbien-admin install launcher     # systemd --user (Linux) / launchd (macOS)
 ```
 
-`unbien-admin install` generates and activates the service from the bundled
-templates:
+`install` generates and activates the service from the bundled templates:
 
 - **Linux:** `~/.config/systemd/user/unbien-launcher.service` —
   `journalctl --user -u unbien-launcher -f` to follow it
@@ -333,7 +361,7 @@ extension converts to `wss://` internally when it opens the socket.
 
 ## Build & install the app
 
-The client is a SwiftUI app in `app/` targeting **iOS 17+ / macOS 14+**. Build
+The client is a SwiftUI app in `app/` targeting **iOS 18+ / macOS 15+**. Build
 and run it from **Xcode** — the interactive app needs the real app targets, not a
 command-line runner.
 
@@ -347,10 +375,11 @@ open UnBien.xcodeproj     # then build/run the UnBien-iOS / UnBien-macOS scheme
 ```
 
 Signing, entitlements, and the Info.plist checklist (iCloud Keychain sync, the
-macOS network-client sandbox entitlement, camera usage for QR scanning) are in
-[Deployment & signing](../DEPLOY.md). The short version: a normal Development
-Team + bundle id is enough for Owner-key iCloud sync; **no** iCloud/CloudKit
-capability is needed.
+macOS network-client sandbox entitlement, camera usage for QR scanning): a
+normal Development Team + bundle id is enough for Owner-key iCloud sync; **no**
+iCloud/CloudKit capability is needed. The macOS app needs the
+`com.apple.security.network.client` sandbox entitlement (already in
+`app/App/macOS/un-bien.entitlements`).
 
 ---
 
@@ -376,15 +405,55 @@ forking and branching.
 
 ---
 
+## The terminal client (CLI)
+
+The CLI (`unbien`) attaches to sessions from any shell — the terminal-native
+companion to the app:
+
+```bash
+npm install -g @geohar/unbien-cli
+unbien            # bare `unbien` = connect: pick a session, chat, steer
+```
+
+Multi-relay, `/connect` session switching, busy-aware submit (typing while
+busy steers, `/queue` waits for the turn to end). The full command surface —
+subcommands, flags, and all 15 slash commands — is in the
+[CLI reference](https://github.com/georgeharker/un-bien/tree/main/unbien-cli).
+
+You can also install it as part of the everything bundle:
+
+```text
+/unbien install cli      # from inside pi
+```
+
+---
+
+## `unbien-admin` reference
+
+The standalone admin CLI (installed with the extension's npm package, or
+reachable via `unbien-admin` after `/unbien install` links it):
+
+| Command | What it does |
+| --- | --- |
+| `unbien-admin install [relay\|launcher\|cli\|all]` | Install a component as a user service. Bare = `all` (relay + launcher + CLI). |
+| `unbien-admin uninstall [relay\|launcher\|all]` | Remove services + CLI shims. Bare = `all`. |
+| `unbien-admin devices` | List paired devices (peers). |
+| `unbien-admin revoke <shortid>` | Revoke a paired device. |
+
+The same targets work as slash commands inside pi: `/unbien install [target]`,
+`/unbien uninstall [target]`.
+
+---
+
 ## Where things live
 
 | What                                                  | Path                                                                                                  |
 | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| What                                                  | Path                                                                                                  |
 | Global extension settings (relay URL, launch backend) | `~/.pi/extensions/un-bien.json`                                                                       |
 | Per-directory config (incl. `allow_remote_launch`)    | `<cwd>/.pi/un-bien/config.json`                                                                       |
 | State (sessions, identity, peers, logs)               | `~/.local/state/un-bien/` (`UNBIEN_STATE_DIR` relocates)                                              |
 | Launcher service (Linux / macOS)                      | `~/.config/systemd/user/unbien-launcher.service` · `~/Library/LaunchAgents/dev.unbien.launcher.plist` |
+| Relay service (Linux / macOS)                          | `~/.config/systemd/user/unbien-relay.service` · `~/Library/LaunchAgents/dev.unbien.relay.plist`       |
 | Relay membership DB                                   | `UNBIEN_MESH_DB_PATH` (`/data/mesh.db` in Docker; bare metal: `<state root>/mesh.db`)                 |
 
 The complete settings reference — every config field and environment variable —
