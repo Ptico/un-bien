@@ -17,7 +17,7 @@ Un Bien is five pieces that work together:
 A typical setup is: **stand up a relay**, **install the extension** and point it
 at that relay, then **build/install the app** and pair it. Do them in that order.
 The optional launcher and CLI install in one command later
-(`/unbien install all`).
+(`/unbien install` — bare installs everything).
 
 > **There is no default relay.** Un Bien ships pointing at nobody's
 > infrastructure — you must run your own (or point at one you trust) before the
@@ -48,7 +48,9 @@ address. Keep it behind a VPN or TLS for anything beyond your home network
 
 To keep it running as a login service (survives reboots), see
 [Flow A](#flow-a--tailscale--launchd--systemd-recommended) — or, on a machine
-that already has the extension: `/unbien install relay`.
+that already has the extension, one command does everything: `/unbien install`
+installs the relay + launcher services and the CLI (targets:
+`[relay|launcher|cli|all]`; bare = `all`).
 
 <details>
 <summary>Alternatively — Docker</summary>
