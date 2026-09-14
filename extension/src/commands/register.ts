@@ -136,23 +136,23 @@ export function registerUnbienCommands(
         // through (the nested "unbien install" registration only serves the
         // command palette) — target parsing must live HERE.
         const target = parseInstallTarget(sub.slice("install".length).trim())
-        if (!target) {
+        if (target) {
+          await _cmdInstallTarget(ctx, target, { linkCli: true })
+        } else {
           ctx.ui.notify(
             "[un-bien] unknown install target. Use: /unbien install [relay|launcher|cli|all]",
             "error",
           )
-        } else {
-          await _cmdInstallTarget(ctx, target, { linkCli: true })
         }
       } else if (sub === "uninstall" || sub.startsWith("uninstall ")) {
         const target = parseInstallTarget(sub.slice("uninstall".length).trim())
-        if (!target) {
+        if (target) {
+          await _cmdUninstallTarget(ctx, target, { linkCli: true })
+        } else {
           ctx.ui.notify(
             "[un-bien] unknown uninstall target. Use: /unbien uninstall [relay|launcher|all]",
             "error",
           )
-        } else {
-          await _cmdUninstallTarget(ctx, target, { linkCli: true })
         }
       } else if (sub === "fork" || sub.startsWith("fork ")) {
         await _cmdFork(deps, sub.slice("fork".length).trim(), ctx)

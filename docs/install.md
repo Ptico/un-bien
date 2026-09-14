@@ -331,6 +331,33 @@ QR.
 
 ---
 
+## Service environment & gotchas
+
+`/unbien install` bakes the installing shell's environment into the service
+units. Three consequences worth knowing:
+
+**Node upgrades orphan the launcher.** The launcher unit pins the exact node
+binary that ran the install (`process.execPath`), so the service never depends
+on `PATH` resolution at boot. When you upgrade node (nvm, Homebrew, system),
+the pinned path can disappear — re-run `unbien-admin install` (idempotent) to
+re-pin. Same after moving the extension or the unbien-cli install.
+
+**Env changes need a re-run.** `PATH`, `PI_CODING_AGENT_DIR`, and every
+`UNBIEN_*` variable present at install time are snapshotted into the unit —
+deliberately: launchd/systemd run with a sparse environment, and without the
+snapshot the daemons would fall back to defaults your shell doesn't use. If
+you change your relay URL, state dir, or agent config location, re-run the
+install to refresh the snapshot.
+
+**The CLI needs a fresh terminal.** `unbien` lands in the npm global bin dir;
+a terminal opened before the install won't have it on `$PATH` yet.
+
+**Startup order doesn't matter.** Both daemons reconnect on their own: the
+launcher retries the relay every 3 seconds (single in-flight chain), and the
+extension's relay client force-closes dead sockets via a liveness ping and
+reconnects on close. Install the relay first, the extension first — either
+order converges.
+
 ## Relay environment variables
 
 | Variable              | Default                                                        | Description                                                                        |
