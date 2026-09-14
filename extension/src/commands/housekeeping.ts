@@ -210,9 +210,7 @@ export async function _cmdUninstallTarget(
   opts: { linkCli?: boolean } = {},
 ): Promise<void> {
   const want =
-    target === "all"
-      ? (["relay", "launcher"] as const)
-      : ([target] as const)
+    target === "all" ? (["relay", "launcher"] as const) : ([target] as const)
 
   if (want.includes("launcher")) _cmdUninstall(ctx, opts)
   if (want.includes("relay")) {

@@ -91,9 +91,7 @@ describe("relay service identity", () => {
   })
 
   it("log lives in the relay's own state root", () => {
-    expect(relayLogPath()).toBe(
-      `${relayStateDir()}/relay.log`,
-    )
+    expect(relayLogPath()).toBe(`${relayStateDir()}/relay.log`)
     expect(relayStateDir()).toContain(".local/state/un-bien")
   })
 })

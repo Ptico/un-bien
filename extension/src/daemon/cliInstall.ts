@@ -34,8 +34,7 @@ export async function installCliPackage(
   // npm is a sibling of node everywhere node is installed; resolve npm-cli.js
   // from process.execPath's tree so we don't depend on `npm` being on a
   // possibly-sparse PATH (same reasoning as findNodeBinary in install.ts).
-  const npmCmd =
-    process.platform === "win32" ? "npm.cmd" : "npm"
+  const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm"
   push(`npm install -g ${CLI_PACKAGE} …`)
 
   const { stdout, stderr } = await execFileAsync(

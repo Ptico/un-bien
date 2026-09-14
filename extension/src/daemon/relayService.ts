@@ -129,9 +129,7 @@ export async function cargoInstallRelay(
   }
   const cargoBin = join(homedir(), ".cargo", "bin", "unbien-relay")
   if (!existsSync(cargoBin)) {
-    throw new Error(
-      `cargo install reported success but ${cargoBin} is missing`,
-    )
+    throw new Error(`cargo install reported success but ${cargoBin} is missing`)
   }
   return { path: cargoBin, source: "cargo-install" }
 }
@@ -160,7 +158,9 @@ function relayTemplatePath(kind: "launchd" | "systemd"): string {
   return join(
     pkgRoot,
     "service-templates",
-    kind === "launchd" ? "relay-launchd.plist.template" : "relay-systemd.service.template",
+    kind === "launchd"
+      ? "relay-launchd.plist.template"
+      : "relay-systemd.service.template",
   )
 }
 
@@ -202,7 +202,9 @@ export async function installRelayService(opts: {
   let binary = findRelayBinary()
   if (!binary) {
     if (opts.autoInstall && hasCargo()) {
-      push("relay binary not found — compiling via cargo install (this takes a few minutes)…")
+      push(
+        "relay binary not found — compiling via cargo install (this takes a few minutes)…",
+      )
       binary = await cargoInstallRelay(push)
     } else {
       throw new Error(
@@ -221,13 +223,16 @@ export async function installRelayService(opts: {
     port,
     home: homedir(),
   }
-  const tplPath = relayTemplatePath(platform === "macos" ? "launchd" : "systemd")
+  const tplPath = relayTemplatePath(
+    platform === "macos" ? "launchd" : "systemd",
+  )
   if (!existsSync(tplPath)) {
     throw new Error(`relay service template missing: ${tplPath}`)
   }
   const rendered = renderRelayTemplate(readFileSync(tplPath, "utf8"), vars)
 
-  const unitPath = platform === "macos" ? relayLaunchdPlistPath() : relaySystemdUnitPath()
+  const unitPath =
+    platform === "macos" ? relayLaunchdPlistPath() : relaySystemdUnitPath()
   mkdirSync(dirname(unitPath), { recursive: true })
   writeFileSync(unitPath, rendered)
   push(`wrote ${unitPath}`)
@@ -267,7 +272,9 @@ export async function uninstallRelayService(): Promise<{
   const log: string[] = []
   const platform = process.platform
   if (platform !== "darwin" && platform !== "linux") {
-    throw new Error(`relay service uninstall supports macOS and Linux only (this is ${platform})`)
+    throw new Error(
+      `relay service uninstall supports macOS and Linux only (this is ${platform})`,
+    )
   }
   const unitPath =
     platform === "darwin" ? relayLaunchdPlistPath() : relaySystemdUnitPath()

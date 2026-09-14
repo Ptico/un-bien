@@ -3067,11 +3067,9 @@ if (_isDirectRun()) {
     // Relay/CLI installs spawn package managers (async); await before exit.
     // Propagate failure as a non-zero exit so callers (Cockpit / CI) detect it.
     // eslint-disable-next-line no-async-promise-executor
-    await _cmdInstallTarget(stubCtx, target, { linkCli: false }).then(
-      (ok) => {
-        if (!ok) process.exit(1)
-      },
-    )
+    await _cmdInstallTarget(stubCtx, target, { linkCli: false }).then((ok) => {
+      if (!ok) process.exit(1)
+    })
   } else if (subcmd === "uninstall") {
     const stubCtx = { ui: _cliStubUi() }
     const target = parseInstallTarget(cliArgs[0] ?? "")
