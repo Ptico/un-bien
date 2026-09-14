@@ -340,7 +340,7 @@ Attach to your Pi coding-agent sessions from your phone - stream transcripts, wa
 
 ## Description
 
-Un Bien is a native iOS/macOS client for the Pi coding agent (<http://pi.dev>). Pair your phone with your own machines over a relay you host, then attach to running agent sessions: live transcripts with styled edit diffs and tool results, inline images, thinking blocks, plan & subagent panels — and an interactive prompt for ask-style clarifications. Steer mid-turn or queue follow-ups; launch new sessions on paired machines (opt-in, machine-side).
+Un Bien is a native client for the Pi coding agent (<http://pi.dev>). Pair your phone with your own machines over a relay you host, then attach to running agent sessions: live transcripts with styled edit diffs and tool results, inline images, thinking blocks, plan & subagent panels — and an interactive prompt for ask-style clarifications. Steer mid-turn or queue follow-ups; launch new sessions on paired machines (opt-in, machine-side).
 
 Self-hosted by design: there is no Un Bien cloud, no account, and no telemetry — your relay, your keys, your machines. Includes a read-only demo mode so you can look around without any setup.
 
