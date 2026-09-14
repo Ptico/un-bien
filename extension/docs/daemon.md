@@ -35,9 +35,9 @@ re-run it and the launcher unloads the old entry before bootstrapping the
 new one. If it still fails:
 
 ```bash
-launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/dev.unbien.launcher.plist
-launchctl unload ~/Library/LaunchAgents/dev.unbien.launcher.plist 2>/dev/null
-rm ~/Library/LaunchAgents/dev.unbien.launcher.plist
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.georgeharker.unbien.launcher.plist
+launchctl unload ~/Library/LaunchAgents/com.georgeharker.unbien.launcher.plist 2>/dev/null
+rm ~/Library/LaunchAgents/com.georgeharker.unbien.launcher.plist
 unbien-admin install
 ```
 

@@ -79,7 +79,7 @@ describe("findTemplate", () => {
     expect(p.endsWith("launchd.plist.template")).toBe(true)
     const content = readFileSync(p, "utf8")
     expect(content).toContain("<key>Label</key>")
-    expect(content).toContain("dev.unbien.launcher")
+    expect(content).toContain("com.georgeharker.unbien.launcher")
     expect(content).toContain("{NODE}")
     expect(content).toContain("{PRESENCE}")
   })
@@ -244,7 +244,7 @@ describe.skipIf(posixOnly)("paths", () => {
 
   test("launchdPlistPath lives under ~/Library/LaunchAgents/", () => {
     expect(launchdPlistPath()).toMatch(
-      /Library\/LaunchAgents\/dev\.unbien\.launcher\.plist$/,
+      /Library\/LaunchAgents\/com\.georgeharker\.unbien\.launcher\.plist$/,
     )
   })
 })

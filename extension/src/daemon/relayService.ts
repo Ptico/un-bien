@@ -4,7 +4,7 @@
  * The launcher daemon install (install.ts) manages the MACHINE-side service;
  * this module manages the RELAY-side one. Same shape, different binary:
  *
- *   - **macOS**:  `~/Library/LaunchAgents/dev.unbien.relay.plist`
+ *   - **macOS**:  `~/Library/LaunchAgents/com.georgeharker.unbien.relay.plist`
  *   - **Linux**:  `~/.config/systemd/user/unbien-relay.service`
  *   - **Windows**: not supported (the relay is typically hosted on Linux/macOS;
  *     a Task Scheduler variant is future work).
@@ -34,13 +34,18 @@ const execFileAsync = promisify(execFile)
 
 // ── Identity ───────────────────────────────────────────────────────────────
 
-export const RELAY_LAUNCHD_LABEL = "dev.unbien.relay"
+export const RELAY_LAUNCHD_LABEL = "com.georgeharker.unbien.relay"
 export const RELAY_SYSTEMD_UNIT = "unbien-relay.service"
 /** Default port the service unit pins via UNBIEN_RELAY_PORT. */
 export const RELAY_DEFAULT_PORT = 3000
 
 export function relayLaunchdPlistPath(): string {
-  return join(homedir(), "Library", "LaunchAgents", "dev.unbien.relay.plist")
+  return join(
+  homedir(),
+  "Library",
+  "LaunchAgents",
+  "com.georgeharker.unbien.relay.plist",
+)
 }
 
 export function relaySystemdUnitPath(): string {

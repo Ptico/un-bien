@@ -79,13 +79,15 @@ describe("renderRelayTemplate", () => {
 
 describe("relay service identity", () => {
   it("label + port defaults", () => {
-    expect(RELAY_LAUNCHD_LABEL).toBe("dev.unbien.relay")
+    expect(RELAY_LAUNCHD_LABEL).toBe("com.georgeharker.unbien.relay")
     expect(RELAY_DEFAULT_PORT).toBe(3000)
   })
 
   it("paths live under the user's home (user-level service, no sudo)", () => {
     expect(relayLaunchdPlistPath()).toContain("Library/LaunchAgents")
-    expect(relayLaunchdPlistPath()).toContain("dev.unbien.relay.plist")
+    expect(relayLaunchdPlistPath()).toContain(
+      "com.georgeharker.unbien.relay.plist",
+    )
     expect(relaySystemdUnitPath()).toContain(".config/systemd/user")
     expect(relaySystemdUnitPath()).toContain("unbien-relay.service")
   })

@@ -4,7 +4,7 @@
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>dev.unbien.launcher</string>
+  <string>com.georgeharker.unbien.launcher</string>
 
   <key>ProgramArguments</key>
   <array>

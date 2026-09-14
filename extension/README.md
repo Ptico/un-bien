@@ -464,7 +464,7 @@ Or from inside Pi: `/unbien install` — same service, plus it links the
 The `install` command:
 
 - Writes `~/.config/systemd/user/unbien-launcher.service` (Linux) or
-  `~/Library/LaunchAgents/dev.unbien.launcher.plist` (macOS); on Windows it
+  `~/Library/LaunchAgents/com.georgeharker.unbien.launcher.plist` (macOS); on Windows it
   registers a Task Scheduler task (`RemotePiLauncher`) and prompts for
   elevation once
 - Activates it via `systemctl --user enable --now` or `launchctl bootstrap`

@@ -4,7 +4,7 @@
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>dev.unbien.relay</string>
+  <string>com.georgeharker.unbien.relay</string>
 
   <key>ProgramArguments</key>
   <array>

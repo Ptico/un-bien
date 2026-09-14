@@ -6,6 +6,7 @@ import {
   mkdirSync,
   readFileSync,
   readlinkSync,
+  rmSync,
   symlinkSync,
   unlinkSync,
   writeFileSync,
@@ -131,10 +132,17 @@ export function systemdUnitPath(): string {
 }
 
 export function launchdPlistPath(): string {
-  return join(homedir(), "Library", "LaunchAgents", "dev.unbien.launcher.plist")
+  return join(
+  homedir(),
+  "Library",
+  "LaunchAgents",
+  "com.georgeharker.unbien.launcher.plist",
+)
 }
 
-export const LAUNCHD_LABEL = "dev.unbien.launcher"
+export const LAUNCHD_LABEL = "com.georgeharker.unbien.launcher"
+/** Pre-0.20 label — booted out + removed on install/uninstall (migration). */
+export const LEGACY_LAUNCHD_LABEL = "dev.unbien.launcher"
 /** systemd --user unit name (with `.service`) for the launcher daemon. */
 export const SYSTEMD_UNIT = "unbien-launcher.service"
 /** Windows Task Scheduler task name. */
@@ -291,6 +299,16 @@ export function installService(
     const uid = userInfo().uid
     _tryExec("launchctl", ["bootout", `gui/${uid}`, unitPath], log)
     _tryExec("launchctl", ["unload", unitPath], log)
+    // Migration from the pre-0.20 `dev.unbien.launcher` label: boot the old
+    // service out and remove its plist so it can't double-run after upgrade.
+    const legacyPlist = join(
+      homedir(), "Library", "LaunchAgents", "dev.unbien.launcher.plist",
+    )
+    _tryExec("launchctl", ["bootout", `gui/${uid}`, legacyPlist], log)
+    if (existsSync(legacyPlist)) {
+      rmSync(legacyPlist)
+      log.push(`removed legacy unit ${legacyPlist}`)
+    }
     _exec("launchctl", ["bootstrap", `gui/${uid}`, unitPath], log)
     log.push(`activated via launchctl bootstrap gui/${uid}`)
   } else if (plat === "linux") {
@@ -356,6 +374,14 @@ export function uninstallService(): UninstallResult {
     const uid = userInfo().uid
     _tryExec("launchctl", ["bootout", `gui/${uid}`, unitPath], log)
     _tryExec("launchctl", ["unload", unitPath], log)
+    const legacyPlist = join(
+      homedir(), "Library", "LaunchAgents", "dev.unbien.launcher.plist",
+    )
+    _tryExec("launchctl", ["bootout", `gui/${uid}`, legacyPlist], log)
+    if (existsSync(legacyPlist)) {
+      rmSync(legacyPlist)
+      log.push(`removed legacy unit ${legacyPlist}`)
+    }
     log.push("deactivated via launchctl bootout")
   } else if (plat === "linux") {
     _tryExec("systemctl", ["--user", "disable", "--now", SYSTEMD_UNIT], log)
