@@ -43,8 +43,12 @@ unbien-relay                  # serves on :3000; state in ~/.local/state/un-bien
 
 Verify with `curl http://localhost:3000/health`, and note the address your
 phone will use — e.g. `http://192.168.1.20:3000` on your LAN, or a Tailnet
-address. Keep it behind a VPN or TLS for anything beyond your home network
-(see [trust model](design.md#trust-model-in-one-paragraph)).
+address. Keep the transport encrypted for anything beyond your home network:
+a mesh VPN ([Tailscale](https://tailscale.com), Headscale, Netbird, ZeroTier),
+plain WireGuard, or TLS via a reverse proxy (`wss://` — see
+[TLS](#tls-production)). The relay operator can see routed plaintext, so the
+network layer is the privacy boundary (see
+[trust model](design.md#trust-model-in-one-paragraph)).
 
 To keep it running as a login service (survives reboots), see
 [Flow A](#flow-a--tailscale--launchd--systemd-recommended) — or, on a machine
@@ -138,6 +142,11 @@ the relay URL in the steps below is `http://<relay-host>:3000`. Traffic inside
 the tailnet is already encrypted (WireGuard), so plain `http://` is fine here;
 TLS is only needed if you ever expose the relay beyond the tailnet (see
 [TLS](#tls-production)).
+
+Not tied to Tailscale specifically: any encrypted overlay keeps this posture —
+Headscale (self-hosted control plane, same clients), Netbird or ZeroTier
+(mesh), or plain WireGuard configs. What matters is that the phone-to-relay
+path never crosses the public internet in the clear.
 
 **2. Install the relay on the host.** The one-command path (needs the un-bien
 extension on the host — or use the standalone `unbien-admin` CLI):
