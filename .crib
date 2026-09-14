@@ -1,4 +1,24 @@
 # Auto-created by `crib project setup` — ties this repo to a crib project.
+# paths: EXPLICIT scope (2026-09-14) — the auto-sweep was indexing ALL of
+# .build/checkouts (4791 files incl. vendored swift-cmark/Highlightr/NetworkImage —
+# hours of LLM describe on dependency source). This keeps our own source plus the
+# ONE checkout we actively build against and hack on (swift-markdown-ui).
+# node_modules/.git/etc stay auto-ignored; re-run `crib project index` after edits.
 project: un-bien
 docs:
   - DESIGN.md
+# EXPLICIT extension globs (2026-09-14): dir-wide globs (app/**) enumerated
+# 45k files — Xcode assets, .o/.dia build artifacts, 2.6k prototype spikes —
+# inflating the sweep denominator 30×. pathlib glob has no {a,b} braces, so
+# one line per area×extension. Real source only: Prototypes/, app/.build/,
+# app/build*/, relay/target/ are deliberately NOT globbed (the ONE vendored
+# checkout we hack on — swift-markdown-ui — IS).
+paths:
+  - app/Sources/**/*.swift
+  - app/App/**/*.swift
+  - app/Tests/**/*.swift
+  - extension/src/**/*.ts
+  - relay/**/*.rs
+  - unbien-cli/**/*.ts
+  - scripts/**/*.py
+  - .build/checkouts/swift-markdown-ui/Sources/**/*.swift
