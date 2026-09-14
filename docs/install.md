@@ -28,11 +28,33 @@ The optional launcher and CLI install in one command later
 
 ## Quickstart
 
-The 5-minute path: one relay (Docker), one machine, one pairing. (The app also
+The 5-minute path: one relay, one machine, one pairing. (The app also
 ships a **demo mode** — canned sessions, no infrastructure — if you just want
 to look around first.)
 
 ### 1. Run a relay (any host your phone can reach)
+
+Needs a Rust toolchain ([rustup](https://rustup.rs)):
+
+```bash
+cargo install un-bien-relay   # compiles the binary (a few minutes)
+unbien-relay                  # serves on :3000; state in ~/.local/state/un-bien/
+```
+
+Verify with `curl http://localhost:3000/health`, and note the address your
+phone will use — e.g. `http://192.168.1.20:3000` on your LAN, or a Tailnet
+address. Keep it behind a VPN or TLS for anything beyond your home network
+(see [trust model](design.md#trust-model-in-one-paragraph)).
+
+To keep it running as a login service (survives reboots), see
+[Flow A](#flow-a--tailscale--launchd--systemd-recommended) — or, on a machine
+that already has the extension: `/unbien install relay`.
+
+<details>
+<summary>Alternatively — Docker</summary>
+
+If you have a Docker host (NAS, home server, VPS), the same relay runs as a
+container — build from a repo clone:
 
 ```bash
 docker build -t un-bien-relay ./relay
@@ -40,9 +62,10 @@ docker run -d --name un-bien-relay -p 3000:3000 -v un-bien-data:/data \
   --restart unless-stopped un-bien-relay
 ```
 
-Note the address your phone will use — e.g. `http://192.168.1.20:3000` on your
-LAN, or a Tailnet address. Put it behind a VPN or TLS for anything beyond your
-home network (see [trust model](design.md#trust-model-in-one-paragraph)).
+The `-v un-bien-data:/data` volume keeps the membership DB across upgrades.
+Full notes in [Flow B](#flow-b--docker).
+
+</details>
 
 ### 2. Set up Pi on your machine
 
