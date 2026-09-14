@@ -130,7 +130,7 @@ Then from inside `pi` on that host (or via `unbien-admin install relay`):
 
 That writes and activates the user-level service —
 `~/.config/systemd/user/unbien-relay.service` (Linux) or
-`~/Library/LaunchAgents/dev.unbien.relay.plist` (macOS) — pinning `HOME` so the
+`~/Library/LaunchAgents/com.georgeharker.unbien.relay.plist` (macOS) — pinning `HOME` so the
 relay's state root (`~/.local/state/un-bien/`, relocate with
 `UNBIEN_STATE_DIR`) resolves under the service manager's sparse environment.
 If the binary isn't found it offers a `cargo install un-bien-relay` compile.
@@ -168,7 +168,7 @@ systemctl --user daemon-reload
 systemctl --user enable --now unbien-relay.service
 ```
 
-macOS — `~/Library/LaunchAgents/dev.unbien.relay.plist` (replace `YOU` with
+macOS — `~/Library/LaunchAgents/com.georgeharker.unbien.relay.plist` (replace `YOU` with
 your username):
 
 ```xml
@@ -176,7 +176,7 @@ your username):
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key><string>dev.unbien.relay</string>
+  <key>Label</key><string>com.georgeharker.unbien.relay</string>
   <key>ProgramArguments</key>
   <array><string>/Users/YOU/.cargo/bin/un-bien-relay</string></array>
   <key>RunAtLoad</key><true/>
@@ -188,7 +188,7 @@ your username):
 ```
 
 ```bash
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.unbien.relay.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.georgeharker.unbien.relay.plist
 ```
 
 </details>
@@ -227,7 +227,7 @@ unbien-admin install launcher     # systemd --user (Linux) / launchd (macOS)
 
 - **Linux:** `~/.config/systemd/user/unbien-launcher.service` —
   `journalctl --user -u unbien-launcher -f` to follow it
-- **macOS:** `~/Library/LaunchAgents/dev.unbien.launcher.plist` (label
+- **macOS:** `~/Library/LaunchAgents/com.georgeharker.unbien.launcher.plist` (label
   `dev.unbien.launcher`) — logs to `~/.local/state/un-bien/launcher.log`
 - **Windows:** a Task Scheduler task (`RemotePiLauncher`) — the install step
   prompts for elevation once
@@ -433,12 +433,12 @@ You can also install it as part of the everything bundle:
 The standalone admin CLI (installed with the extension's npm package, or
 reachable via `unbien-admin` after `/unbien install` links it):
 
-| Command | What it does |
-| --- | --- |
+| Command                                            | What it does                                                                  |
+| -------------------------------------------------- | ----------------------------------------------------------------------------- |
 | `unbien-admin install [relay\|launcher\|cli\|all]` | Install a component as a user service. Bare = `all` (relay + launcher + CLI). |
-| `unbien-admin uninstall [relay\|launcher\|all]` | Remove services + CLI shims. Bare = `all`. |
-| `unbien-admin devices` | List paired devices (peers). |
-| `unbien-admin revoke <shortid>` | Revoke a paired device. |
+| `unbien-admin uninstall [relay\|launcher\|all]`    | Remove services + CLI shims. Bare = `all`.                                    |
+| `unbien-admin devices`                             | List paired devices (peers).                                                  |
+| `unbien-admin revoke <shortid>`                    | Revoke a paired device.                                                       |
 
 The same targets work as slash commands inside pi: `/unbien install [target]`,
 `/unbien uninstall [target]`.
@@ -447,14 +447,14 @@ The same targets work as slash commands inside pi: `/unbien install [target]`,
 
 ## Where things live
 
-| What                                                  | Path                                                                                                  |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Global extension settings (relay URL, launch backend) | `~/.pi/extensions/un-bien.json`                                                                       |
-| Per-directory config (incl. `allow_remote_launch`)    | `<cwd>/.pi/un-bien/config.json`                                                                       |
-| State (sessions, identity, peers, logs)               | `~/.local/state/un-bien/` (`UNBIEN_STATE_DIR` relocates)                                              |
-| Launcher service (Linux / macOS)                      | `~/.config/systemd/user/unbien-launcher.service` · `~/Library/LaunchAgents/dev.unbien.launcher.plist` |
-| Relay service (Linux / macOS)                          | `~/.config/systemd/user/unbien-relay.service` · `~/Library/LaunchAgents/dev.unbien.relay.plist`       |
-| Relay membership DB                                   | `UNBIEN_MESH_DB_PATH` (`/data/mesh.db` in Docker; bare metal: `<state root>/mesh.db`)                 |
+| What                                                  | Path                                                                                                               |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Global extension settings (relay URL, launch backend) | `~/.pi/extensions/un-bien.json`                                                                                    |
+| Per-directory config (incl. `allow_remote_launch`)    | `<cwd>/.pi/un-bien/config.json`                                                                                    |
+| State (sessions, identity, peers, logs)               | `~/.local/state/un-bien/` (`UNBIEN_STATE_DIR` relocates)                                                           |
+| Launcher service (Linux / macOS)                      | `~/.config/systemd/user/unbien-launcher.service` · `~/Library/LaunchAgents/com.georgeharker.unbien.launcher.plist` |
+| Relay service (Linux / macOS)                         | `~/.config/systemd/user/unbien-relay.service` · `~/Library/LaunchAgents/com.georgeharker.unbien.relay.plist`       |
+| Relay membership DB                                   | `UNBIEN_MESH_DB_PATH` (`/data/mesh.db` in Docker; bare metal: `<state root>/mesh.db`)                              |
 
 The complete settings reference — every config field and environment variable —
 is in the [extension guide](../extension/README.md#configuration--settings).

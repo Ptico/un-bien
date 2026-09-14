@@ -41,11 +41,11 @@ export const RELAY_DEFAULT_PORT = 3000
 
 export function relayLaunchdPlistPath(): string {
   return join(
-  homedir(),
-  "Library",
-  "LaunchAgents",
-  "com.georgeharker.unbien.relay.plist",
-)
+    homedir(),
+    "Library",
+    "LaunchAgents",
+    "com.georgeharker.unbien.relay.plist",
+  )
 }
 
 export function relaySystemdUnitPath(): string {

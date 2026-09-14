@@ -133,11 +133,11 @@ export function systemdUnitPath(): string {
 
 export function launchdPlistPath(): string {
   return join(
-  homedir(),
-  "Library",
-  "LaunchAgents",
-  "com.georgeharker.unbien.launcher.plist",
-)
+    homedir(),
+    "Library",
+    "LaunchAgents",
+    "com.georgeharker.unbien.launcher.plist",
+  )
 }
 
 export const LAUNCHD_LABEL = "com.georgeharker.unbien.launcher"
@@ -302,7 +302,10 @@ export function installService(
     // Migration from the pre-0.20 `dev.unbien.launcher` label: boot the old
     // service out and remove its plist so it can't double-run after upgrade.
     const legacyPlist = join(
-      homedir(), "Library", "LaunchAgents", "dev.unbien.launcher.plist",
+      homedir(),
+      "Library",
+      "LaunchAgents",
+      "dev.unbien.launcher.plist",
     )
     _tryExec("launchctl", ["bootout", `gui/${uid}`, legacyPlist], log)
     if (existsSync(legacyPlist)) {
@@ -375,7 +378,10 @@ export function uninstallService(): UninstallResult {
     _tryExec("launchctl", ["bootout", `gui/${uid}`, unitPath], log)
     _tryExec("launchctl", ["unload", unitPath], log)
     const legacyPlist = join(
-      homedir(), "Library", "LaunchAgents", "dev.unbien.launcher.plist",
+      homedir(),
+      "Library",
+      "LaunchAgents",
+      "dev.unbien.launcher.plist",
     )
     _tryExec("launchctl", ["bootout", `gui/${uid}`, legacyPlist], log)
     if (existsSync(legacyPlist)) {

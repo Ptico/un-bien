@@ -40,9 +40,9 @@ launch request.
 
 ## Building, signing & testing
 
-| Document                                             | What it covers                                                                                                                                     |
-| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Install & setup](install.md#build--install-the-app) | Building the iOS/macOS app with Xcode + XcodeGen, and standing up the relay.                                                                       |
-| [App Store release checklist](../APPSTORE.md)      | The submission checklist — screenshots, review notes, signing. (Not rendered on the docs site.) |
+| Document                                             | What it covers                                                                                  |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| [Install & setup](install.md#build--install-the-app) | Building the iOS/macOS app with Xcode + XcodeGen, and standing up the relay.                    |
+| [App Store release checklist](../APPSTORE.md)        | The submission checklist — screenshots, review notes, signing. (Not rendered on the docs site.) |
 
-| [Self-host the relay](../relay/README.md)            | The relay's own build, environment variables, mesh endpoint, and reverse-proxy setup.                                                              |
+| [Self-host the relay](../relay/README.md) | The relay's own build, environment variables, mesh endpoint, and reverse-proxy setup. |
