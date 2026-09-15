@@ -27,6 +27,14 @@ website:
   title: "un-bien"
   description: "Mobile remote control + local agent mesh for the Pi agent."
   favicon: app/icons/un-bien.svg
+  site-url: https://docs.georgeharker.com/un-bien
+  # Social link previews (Reddit/Slack/Discord/iMessage read Open Graph tags).
+  # Image is pinned to the /main deployment (the evergreen branch docs) —
+  # each branch/tag deploy ships its own copy under its own subpath.
+  open-graph:
+    image: https://docs.georgeharker.com/un-bien/main/images/og-card.png
+    locale: en_US
+  twitter-card: true
   search: true
   repo-url: https://github.com/georgeharker/un-bien
   sidebar:
