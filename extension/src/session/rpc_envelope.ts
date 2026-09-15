@@ -333,7 +333,12 @@ export function createRpcEnvelope(
   // SAFETY: pi.on's public typing is a narrower event-name union; the live
   // plane subscribes by string name, which is valid at runtime for every
   // RPC_EVENT_NAMES entry (they are real AgentSessionEvent names).
-  const on = pi.on as unknown as (
+  // BIND the receiver: some hosts implement ExtensionAPI as class methods
+  // whose `this` carries per-extension state (oh-my-pi's
+  // ConcreteExtensionAPI.on reads this.extension.handlers) — a detached
+  // `on(...)` is a TypeError there even though pi's own implementation
+  // tolerates it.
+  const on = pi.on.bind(pi) as unknown as (
     event: string,
     handler: (payload: unknown) => void,
   ) => void
