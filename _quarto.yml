@@ -36,7 +36,7 @@ website:
   # Image is pinned to the /main deployment (the evergreen branch docs) —
   # each branch/tag deploy ships its own copy under its own subpath.
   open-graph:
-    image: https://docs.georgeharker.com/un-bien/main/images/og-card.png
+    image: https://docs.georgeharker.com/un-bien/main/docs/images/og-card.png
     locale: en_US
   twitter-card: true
   search: true
