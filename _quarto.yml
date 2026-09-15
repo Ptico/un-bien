@@ -1,5 +1,9 @@
 project:
   type: website
+  # Force-ship the OG card — the absolute og:image URL below can't be mapped
+  # to a local file, so Quarto wouldn't copy it into the deployment.
+  resources:
+    - docs/images/og-card.png
   render:
     - index.md
     - README.md # README files must be listed explicitly; globs skip them
