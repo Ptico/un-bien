@@ -5,7 +5,7 @@ title: "App guide"
 A tour of the iOS/macOS client: first run, adding a relay, pairing a machine,
 and what each part of the transcript does.
 
-[![Download on the App Store](https://img.shields.io/badge/Download_on_the_App_Store-0D96F6?logo=appstore&logoColor=white)](https://apps.apple.com/app/un-bien/id6807171218) · [direct link](https://apps.apple.com/app/un-bien/id6807171218) — iOS now;
+[![Download on the App Store](images/app-store-badge.svg)](https://apps.apple.com/app/un-bien/id6807171218) · [direct link](https://apps.apple.com/app/un-bien/id6807171218) — iOS now;
 macOS when its review completes.
 
 This guide assumes you already have **a relay running** and **Pi with the

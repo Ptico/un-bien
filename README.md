@@ -11,7 +11,7 @@ renders their transcripts with styled edit/tool-result summaries, and lets you
 approve tools and steer the agent — plus a local agent mesh so multiple Pi
 sessions (and agents) can talk to each other.
 
-> [![Download on the App Store](https://img.shields.io/badge/Download_on_the_App_Store-0D96F6?logo=appstore&logoColor=white)](https://apps.apple.com/app/un-bien/id6807171218)
+> [![Download on the App Store](docs/images/app-store-badge.svg)](https://apps.apple.com/app/un-bien/id6807171218)
 >
 > **Status:** **Available on the App Store (iOS)** — macOS pending review.
 
