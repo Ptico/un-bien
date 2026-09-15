@@ -5,6 +5,9 @@ title: "App guide"
 A tour of the iOS/macOS client: first run, adding a relay, pairing a machine,
 and what each part of the transcript does.
 
+[![Download on the App Store](https://img.shields.io/badge/Download_on_the_App_Store-0D96F6?logo=appstore&logoColor=white)](https://apps.apple.com/app/un-bien/id6807171218) · [direct link](https://apps.apple.com/app/un-bien/id6807171218) — iOS now;
+macOS when its review completes.
+
 This guide assumes you already have **a relay running** and **Pi with the
 un-bien extension** on a machine — if not, start with
 [Install & setup](install.md) and come back. If you just want to look around
@@ -275,7 +278,7 @@ machine, so it reflects whatever the agent is actually tracking rather than
 anything the app invents.
 
 Both pi-subagents extensions should work - [`@gotgenes/pi-subagents`](https://github.com/gotgenes/pi-packages) and [`@tintinweb/pi-subagents`](https://github.com/tintinweb/pi-subagents)
-For plans, the protocol is pi-event driven. (Cribsheet)[https://docs.georgeharker.com/cribsheet/main/] memory system along with (pi-plan)[https://github.com/georgeharker/pi-plan] supports this protocol and sends events on the event bus which un-bien picks up.
+For plans, the protocol is pi-event driven. [Cribsheet](https://docs.georgeharker.com/cribsheet/main/) memory system along with [pi-plan](https://github.com/georgeharker/pi-plan) supports this protocol and sends events on the event bus which un-bien picks up.
 
 ---
 

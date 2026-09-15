@@ -11,17 +11,22 @@ renders their transcripts with styled edit/tool-result summaries, and lets you
 approve tools and steer the agent — plus a local agent mesh so multiple Pi
 sessions (and agents) can talk to each other.
 
-> **Status:** WIP, actively maturing — functional and usable, with polish
-> ongoing toward the first public release.
+> [![Download on the App Store](https://img.shields.io/badge/Download_on_the_App_Store-0D96F6?logo=appstore&logoColor=white)](https://apps.apple.com/app/un-bien/id6807171218)
+>
+> **Status:** **Available on the App Store (iOS)** — macOS pending review.
+
+[App Store (iOS)](https://apps.apple.com/app/un-bien/id6807171218) ·
+[Docs](https://docs.georgeharker.com/un-bien) ·
+[Install & setup](https://docs.georgeharker.com/un-bien/install.html)
 
 ## Monorepo layout
 
-| Path         | What it is                                                              |
-| ------------ | ----------------------------------------------------------------------- |
-| `app/`       | Native SwiftUI client (iOS + macOS). Build/test with `swift build` / `swift test`. |
-| `extension/` | The Pi extension (TypeScript). Loaded by pointing `pi` at the repo root (`pi.extensions` → `./extension/dist`). Build with `pnpm -C extension build`. |
+| Path         | What it is                                                                                                                                                    |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `app/`       | Native SwiftUI client (iOS + macOS). Build/test with `swift build` / `swift test`.                                                                            |
+| `extension/` | The Pi extension (TypeScript). Loaded by pointing `pi` at the repo root (`pi.extensions` → `./extension/dist`). Build with `pnpm -C extension build`.         |
 | `relay/`     | The WebSocket relay (Rust, package `un-bien-relay`). A dumb routing pipe — TLS in transit; the operator can see routed plaintext, so self-host one you trust. |
-| `docs/`      | Protocol notes and fixtures.                                            |
+| `docs/`      | Protocol notes and fixtures.                                                                                                                                  |
 
 ## Attribution
 
