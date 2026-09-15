@@ -6,7 +6,7 @@ title: "Un Bien"
   <img src="app/icons/un-bien.svg" width="140" alt="Un Bien logo" />
 </p>
 
-[![Download on the App Store](images/app-store-badge.svg)](https://apps.apple.com/app/un-bien/id6807171218)
+[![Download on the App Store](docs/images/app-store-badge.svg)](https://apps.apple.com/app/un-bien/id6807171218)
 
 _Now available on the App Store (iOS)._
 
