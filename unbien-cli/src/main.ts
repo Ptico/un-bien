@@ -3,6 +3,7 @@
 
 const COMMANDS = new Map([
   ["connect", () => import("./connect.js")],
+  ["create-session", () => import("./create_session.js")],
   ["replay", () => import("./replay.js")],
   ["pair", () => import("./pair.js")],
   ["relay", () => import("./relay.js")],
@@ -37,6 +38,8 @@ if (!load) {
   console.error(
     `usage: unbien [command] [options]\n\n` +
       "  connect   attach to a live pi session over the relay (default)\n" +
+      "  create-session <machine> [--dir <cwd>] [--name <name>]\n" +
+      "            spawn a fresh pi session on an idle machine\n" +
       "  replay    render a captured envelope stream from a file\n" +
       "  pair      pair with a machine (paste its unbien:// invite)\n" +
       "  relay     manage remembered relays (add / remove / list)\n\n" +
