@@ -93,6 +93,31 @@ export type UbFrame =
       mode: string
       cwd?: string
       name?: string
+      /** Resume a stored session (pi --session <path|partial-uuid>). */
+      resume?: string
+    }
+  | {
+      // daemon->owner listing (prototype: cli resume-session). Backed by pi's
+      // public SessionManager — the daemon is otherwise pi-independent.
+      type: "sessions_list"
+      id: string
+      scope?: "cwd" | "all"
+      cwd?: string
+      filter?: string
+    }
+  | {
+      type: "sessions_list_result"
+      id: string
+      in_reply_to: string
+      sessions: Array<{
+        path: string
+        id: string
+        name?: string
+        summary: string
+        cwd: string
+        modified: string
+        messageCount: number
+      }>
     }
   | {
       // app->peer: caps request | peer->app: caps response. A machine-level

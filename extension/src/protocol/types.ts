@@ -206,6 +206,34 @@ export type ClientMessage =
       mode: "tmux" | "rpc"
       cwd?: string
       name?: string
+      /** Resume a previous session instead of starting fresh: pi session
+       *  file path or partial UUID (passed to `pi --session`). */
+      resume?: string
+    }
+  // Prototype (cli resume-session): the launcher daemon lists stored sessions
+  // via pi's SessionManager — pi-independent room, no live pi required.
+  | {
+      type: "sessions_list"
+      id: string
+      /** "cwd" scopes to frame.cwd (default: process cwd); "all" is global. */
+      scope?: "cwd" | "all"
+      cwd?: string
+      /** Case-insensitive substring filter over name + first message. */
+      filter?: string
+    }
+  | {
+      type: "sessions_list_result"
+      id: string
+      in_reply_to: string
+      sessions: Array<{
+        path: string
+        id: string
+        name?: string
+        summary: string
+        cwd: string
+        modified: string
+        messageCount: number
+      }>
     }
   // Plan/57 — interactive extension prompt response (ask_user via pi-ask).
   // Mirrors RpcExtensionUIResponse; the optional `ask` envelope carries

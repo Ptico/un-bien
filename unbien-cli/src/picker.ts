@@ -104,3 +104,59 @@ export function pickSession(
     paint()
   })
 }
+
+/**
+ * Generic variant: raw-mode SelectList over caller-built items (the resume
+ * chooser reuses this — its rows carry name/summary/recency, not RoomInfo).
+ * Resolves the chosen `value`, or null if cancelled.
+ */
+export function pickRaw(items: readonly SelectItem[]): Promise<string | null> {
+  const list = new SelectList([...items], MAX_VISIBLE, getSelectListTheme())
+
+  const input = process.stdin
+  const output = process.stderr
+  const width = output.columns ?? 100
+  let filter = ""
+  let lastHeight = 0
+
+  const paint = () => {
+    if (lastHeight > 0) output.write(`\u001b[${lastHeight}A`)
+    const lines = [
+      `  filter: ${filter}\u001b[K`,
+      ...list.render(width).map((line) => `${line}\u001b[K`),
+    ]
+    for (const line of lines) output.write(`${line}\n`)
+    lastHeight = lines.length
+  }
+
+  return new Promise((resolve) => {
+    const finish = (value: string | null) => {
+      input.off("data", onData)
+      if (input.isTTY) input.setRawMode(false)
+      output.write("\u001b[?25h")
+      resolve(value)
+    }
+
+    list.onSelect = (item) => finish(item.value)
+    list.onCancel = () => finish(null)
+
+    const onData = (chunk: Buffer) => {
+      const data = chunk.toString("utf8")
+      if (data === "\u0003") {
+        finish(null)
+        return
+      }
+      if (data === "\u007f" || data === "\b") {
+        filter = filter.slice(0, -1)
+        list.setFilter(filter)
+      } else if (/^[\x20-\x7e]+$/.test(data)) {
+        filter += data
+        list.setFilter(filter)
+      }
+    }
+
+    if (input.isTTY) input.setRawMode(true)
+    input.on("data", onData)
+    paint()
+  })
+}

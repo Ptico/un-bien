@@ -49,7 +49,27 @@ export interface LauncherHandle {
   stop(): void
 }
 
-export async function startLauncher(): Promise<LauncherHandle> {
+export interface LauncherOptions {
+  /** Test seam: the stored-session lister behind `sessions_list`. Defaults to
+   *  pi's SessionManager (lazy import — the daemon stays pi-independent at
+   *  runtime until this is first exercised). */
+  sessionsLister?: () => Promise<
+    Array<{
+      path: string
+      id: string
+      name?: string
+      firstMessage: string
+      cwd: string
+      modified: Date
+      messageCount: number
+    }>
+  >
+}
+
+export async function startLauncher(
+  options: LauncherOptions = {},
+): Promise<LauncherHandle> {
+  const sessionsLister = options.sessionsLister
   const kp = await getOrCreateEd25519Keypair()
   const epk = Buffer.from(kp.publicKey).toString("base64url")
   const roomId = roomIdForControl(epk)
@@ -101,6 +121,7 @@ export async function startLauncher(): Promise<LauncherHandle> {
   ): Promise<void> {
     if (env.ub === undefined) return
     const frame = env.ub as Record<string, unknown>
+    envLog(`launcher ub frame: type=${String(frame.type)} peer=${peer}`)
 
     if (frame.type === "presence_status") {
       sender.sendEnvelope({
@@ -110,6 +131,76 @@ export async function startLauncher(): Promise<LauncherHandle> {
           hostname: hostname(),
           backend: configuredBackend(),
           ...(typeof frame.id === "string" ? { in_reply_to: frame.id } : {}),
+        },
+      })
+      return
+    }
+
+    // Prototype (cli resume-session): list stored sessions via pi's public
+    // SessionManager — the daemon is pi-INDEPENDENT at runtime, but the
+    // package (and therefore the dep) ships with it, so this import is free.
+    // Lister is injectable so tests don't scan the real session dir.
+    if (frame.type === "sessions_list") {
+      const defaultLister = async (): Promise<
+          Array<{
+            path: string
+            id: string
+            name?: string
+            firstMessage: string
+            cwd: string
+            modified: Date
+            messageCount: number
+          }>
+        > => {
+          const { SessionManager } = await import("@earendil-works/pi-coding-agent")
+          const scope = frame.scope === "all" ? "all" : "cwd"
+          const cwd =
+            typeof frame.cwd === "string" && frame.cwd.length > 0
+              ? _expandTilde(frame.cwd)
+              : process.cwd()
+          const found =
+            scope === "all" ? await SessionManager.listAll() : await SessionManager.list(cwd)
+          return found.map((s) => ({
+            path: s.path,
+            id: s.id,
+            ...(s.name ? { name: s.name } : {}),
+            firstMessage: s.firstMessage,
+            cwd: s.cwd,
+            modified: s.modified,
+            messageCount: s.messageCount,
+          }))
+        }
+      const all = await (sessionsLister ?? defaultLister)()
+      envLog(`sessions_list: ${all.length} sessions (scope=${String(frame.scope)})`)
+      const filter =
+        typeof frame.filter === "string" && frame.filter.trim().length > 0
+          ? frame.filter.trim().toLowerCase()
+          : null
+      const sessions = all
+        .filter((s) => {
+          if (!filter) return true
+          return (
+            (s.name ?? "").toLowerCase().includes(filter) ||
+            s.firstMessage.toLowerCase().includes(filter)
+          )
+        })
+        .sort((a, b) => b.modified.getTime() - a.modified.getTime())
+        .slice(0, 50)
+        .map((s) => ({
+          path: s.path,
+          id: s.id,
+          ...(s.name ? { name: s.name } : {}),
+          summary: s.firstMessage.slice(0, 120),
+          cwd: s.cwd,
+          modified: s.modified.toISOString(),
+          messageCount: s.messageCount,
+        }))
+      sender.sendEnvelope({
+        ub: {
+          type: "sessions_list_result",
+          id: typeof frame.id === "string" ? frame.id : "",
+          in_reply_to: typeof frame.id === "string" ? frame.id : "",
+          sessions,
         },
       })
       return
@@ -150,6 +241,9 @@ export async function startLauncher(): Promise<LauncherHandle> {
       configuredBackend(),
       cwd,
       typeof frame.name === "string" ? frame.name : undefined,
+      typeof frame.resume === "string" && frame.resume.trim().length > 0
+        ? frame.resume.trim()
+        : undefined,
     )
     if (launchError) envLog(`launcher session_launch error: ${launchError}`)
   }

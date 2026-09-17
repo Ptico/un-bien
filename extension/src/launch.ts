@@ -52,10 +52,17 @@ export function _buildTmuxLaunchArgs(
   cwd: string,
   sessionExists: boolean,
   sessionName?: string | undefined,
+  resume?: string | undefined,
 ): string[] {
   const nameArgv =
     typeof sessionName === "string" && sessionName.trim().length > 0
       ? ["-n", sessionName.trim()]
+      : []
+  // Resume a stored session: `--session <path|partial-uuid>` (NOT -r — that
+  // opens pi's interactive picker, unusable in a spawned window).
+  const resumeArgv =
+    typeof resume === "string" && resume.trim().length > 0
+      ? ["--session", resume.trim()]
       : []
   return sessionExists
     ? [
@@ -68,6 +75,7 @@ export function _buildTmuxLaunchArgs(
         cwd,
         "pi",
         ...nameArgv,
+        ...resumeArgv,
       ]
     : [
         "new-session",
@@ -80,6 +88,7 @@ export function _buildTmuxLaunchArgs(
         cwd,
         "pi",
         ...nameArgv,
+        ...resumeArgv,
       ]
 }
 
@@ -213,10 +222,15 @@ export function _launchSession(
   mode: "tmux" | "herdr" | "rpc",
   cwd: string,
   name: string | undefined,
+  resume?: string | undefined,
 ): string | null {
   if (mode === "rpc") return "launch mode 'rpc' is not supported yet"
   if (mode !== "tmux" && mode !== "herdr") {
     return `unknown launch mode '${mode}'`
+  }
+  if (resume && mode === "herdr") {
+    // herdr's workspace plumbing passes no args through to pi yet.
+    return "resume is not supported on the herdr backend yet (tmux only)"
   }
   if (!existsSync(cwd) || !statSync(cwd).isDirectory()) {
     return `cwd does not exist or is not a directory: ${cwd}`
@@ -244,7 +258,7 @@ export function _launchSession(
   try {
     const child = spawn(
       "tmux",
-      _buildTmuxLaunchArgs(session, windowName, cwd, sessionExists, name),
+      _buildTmuxLaunchArgs(session, windowName, cwd, sessionExists, name, resume),
       { detached: true, stdio: "ignore" },
     )
     child.unref()

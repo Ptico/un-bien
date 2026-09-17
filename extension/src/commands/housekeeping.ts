@@ -212,7 +212,12 @@ export async function _cmdUninstallTarget(
   const want =
     target === "all" ? (["relay", "launcher"] as const) : ([target] as const)
 
-  if (want.includes("launcher")) _cmdUninstall(ctx, opts)
+  // CLI-shim cleanup rides FULL uninstalls only: `uninstall relay` must not
+  // delete the unbien-admin binary that invoked it. Component-scoped
+  // uninstalls pass linkCli: false down.
+  const componentOpts =
+    target === "all" ? opts : { ...opts, linkCli: false }
+  if (want.includes("launcher")) _cmdUninstall(ctx, componentOpts)
   if (want.includes("relay")) {
     try {
       const r = await uninstallRelayService()

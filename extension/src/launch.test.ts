@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest"
 import {
   _buildTmuxLaunchArgs,
+  _launchSession,
   _buildHerdrWorkspaceArgs,
   _buildHerdrAgentStartArgs,
   _herdrPaneIdFromCreate,
@@ -124,5 +125,31 @@ describe("launch backends — tmux/herdr argv + tilde expansion", () => {
     // absolute + relative paths pass through untouched
     expect(_expandTilde("/abs/path")).toBe("/abs/path")
     expect(_expandTilde("relative")).toBe("relative")
+  })
+})
+
+describe("launch backends — resume passthrough", () => {
+  test("tmux argv appends --session <target>", () => {
+    const argv = _buildTmuxLaunchArgs(
+      "un-bien",
+      "win",
+      "/tmp/proj",
+      true,
+      "my session",
+      "01a0128d-dc23",
+    )
+    expect(argv).toContain("--session")
+    expect(argv[argv.indexOf("--session") + 1]).toBe("01a0128d-dc23")
+    expect(argv.indexOf("--session")).toBeGreaterThan(argv.indexOf("-n"))
+  })
+
+  test("no resume target -> no --session in argv", () => {
+    const argv = _buildTmuxLaunchArgs("un-bien", "win", "/tmp/proj", false)
+    expect(argv).not.toContain("--session")
+  })
+
+  test("herdr + resume is a clear error (no arg passthrough yet)", () => {
+    const err = _launchSession("herdr", "/tmp/proj", undefined, "01a0128d")
+    expect(err).toMatch(/resume.*herdr/i)
   })
 })
