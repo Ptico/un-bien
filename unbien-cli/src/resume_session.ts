@@ -1,4 +1,4 @@
-import { requireMachine, connectControlRoom, launchAndWait } from "./machine.js"
+import { requireMachine, connectControlRoom, launchAndWait, waitForRoom, handoffToConnect } from "./machine.js"
 import { pickRaw } from "./picker.js"
 import { Shell } from "./tui.js"
 
@@ -180,11 +180,20 @@ export async function run(argv: string[]): Promise<void> {
     Shell.exitAfterDrain(1)
     process.exit(1)
   }
-  console.log(
-    `resuming ${chosen.name ?? chosen.id.slice(0, 8)} on ${label} — ` +
-      `it joins the mesh when pi opens; attach with \`unbien connect ${machine.epk.slice(0, 8)} --list\`.`,
-  )
-  Shell.exitAfterDrain(0)
+  console.error(`launched — waiting for the session to go live…`)
+  // pi REUSES the session id on resume (it lives in the session file header),
+  // so the resumed room is matchable by sessionId deterministically.
+  const room = await waitForRoom(client, (r) => r.sessionId === chosen.id)
+  if (!room) {
+    console.error(
+      `the session did not come live within 30s — it may still be starting. ` +
+        `Attach later with:\n  unbien connect ${machine.epk.slice(0, 8)} --session ${chosen.id}`,
+    )
+    Shell.exitAfterDrain(1)
+    process.exit(1)
+  }
+  console.error(`session is live — attaching…`)
+  process.exit(await handoffToConnect(machine, chosen.id))
 }
 
 await run(process.argv.slice(2))

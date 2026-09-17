@@ -2,7 +2,7 @@ import { createHash } from "node:crypto"
 import { Buffer } from "node:buffer"
 import { loadPeers, type PairedPeer } from "./store.js"
 import { loadOrCreateIdentity } from "./identity.js"
-import { SessionClient } from "./client.js"
+import { SessionClient, type RoomInfo } from "./client.js"
 import { Shell } from "./tui.js"
 
 /**
@@ -106,6 +106,50 @@ export async function launchAndWait(
       resolve({ ok: true, note: "" })
     }, timeoutMs)
   })
+}
+
+
+/** Poll the machine's room list until a session matching `match` goes live
+ *  (pi startup + mesh join take a few seconds after a launch). Resolves the
+ *  live room, or null on timeout. */
+export async function waitForRoom(
+  client: SessionClient,
+  match: (room: RoomInfo) => boolean,
+  timeoutMs = 30_000,
+  intervalMs = 2_000,
+): Promise<RoomInfo | null> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    try {
+      const rooms = await client.listRooms()
+      const found = rooms.find(match)
+      if (found) return found
+    } catch {
+      /* transient relay hiccup — keep polling */
+    }
+    await new Promise((r) => setTimeout(r, intervalMs))
+  }
+  return null
+}
+
+/** Spawn the interactive `unbien connect` attach flow for a live session and
+ *  wait for it (stdio inherited — the child owns the terminal). Returns the
+ *  child's exit code. */
+export async function handoffToConnect(
+  machine: PairedPeer,
+  sessionId: string,
+): Promise<number> {
+  const { spawn } = await import("node:child_process")
+  const { fileURLToPath } = await import("node:url")
+  // dist/machine.js → dist/main.js (the CLI front door routes `connect`)
+  const mainJs = fileURLToPath(new URL("./main.js", import.meta.url))
+  const target = machine.name ?? machine.epk.slice(0, 8)
+  const child = spawn(
+    process.execPath,
+    [mainJs, "connect", target, "--session", sessionId],
+    { stdio: "inherit", env: process.env },
+  )
+  return new Promise((resolve) => child.on("exit", (code) => resolve(code ?? 1)))
 }
 
 /** Connect a SessionClient to a machine's control room. Exits on unreachable. */

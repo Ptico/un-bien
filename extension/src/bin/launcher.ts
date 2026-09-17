@@ -55,7 +55,15 @@ async function main(): Promise<void> {
     process.exit(0)
   }
   process.on("SIGINT", () => shutdown("SIGINT"))
-  process.on("SIGTERM", () => shutdown("SIGTERM"))
+  process.on("SIGTERM", () => {
+    // Attribution: something restarts this daemon every ~minute — the pid +
+    // uptime make the victim (and the killer's cadence) identifiable from
+    // the log alone.
+    envLog(
+      `SIGTERM received (pid ${process.pid}, uptime ${Math.round(process.uptime())}s) — shutting down`,
+    )
+    shutdown("SIGTERM")
+  })
 }
 
 main().catch((err: unknown) => {

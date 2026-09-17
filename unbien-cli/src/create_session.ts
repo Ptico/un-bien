@@ -1,5 +1,5 @@
 import { loadPeers } from "./store.js"
-import { requireMachine, connectControlRoom, launchAndWait } from "./machine.js"
+import { requireMachine, connectControlRoom, launchAndWait, waitForRoom, handoffToConnect } from "./machine.js"
 import { Shell } from "./tui.js"
 
 /**
@@ -42,6 +42,11 @@ export async function run(argv: string[]): Promise<void> {
   console.error(
     `launching pi on ${label}${cwd ? ` in ${cwd}` : ""}${name ? ` as '${name}'` : ""} …`,
   )
+  // Pre-launch room snapshot: the new session is the room that appears after
+  // this point (pi mints a fresh id, so there is no id to match upfront).
+  const beforeRooms = new Set(
+    (await client.listRooms()).map((r) => r.room_id),
+  )
   const outcome = await launchAndWait(client, { cwd, name })
 
   if (!outcome.ok) {
@@ -50,11 +55,30 @@ export async function run(argv: string[]): Promise<void> {
     process.exit(1)
   }
 
-  console.log(
-    `launched on ${label}. The session joins the mesh when pi starts — ` +
-      `attach with \`unbien connect ${machine.epk.slice(0, 8)} --list\`.`,
-  )
-  Shell.exitAfterDrain(0)
+  console.error(`launched — waiting for the session to go live…`)
+  const room = await waitForRoom(client, (r) => {
+    if (beforeRooms.has(r.room_id)) return false // pre-existing session
+    if (name && r.name === name) return true
+    if (cwd && r.cwd === cwd) return true
+    return !name && !cwd // no matcher given: any new room is ours
+  })
+  if (!room) {
+    console.error(
+      `the session did not come live within 30s — it may still be starting. ` +
+        `Check the machine and attach later with:\n  unbien connect ${machine.epk.slice(0, 8)} --list`,
+    )
+    Shell.exitAfterDrain(1)
+    process.exit(1)
+  }
+  if (!room.sessionId) {
+    console.error(
+      `session is live (${room.name ?? room.room_id}) — attach with:\n  unbien connect ${machine.epk.slice(0, 8)} --list`,
+    )
+    Shell.exitAfterDrain(0)
+    process.exit(0)
+  }
+  console.error(`session is live — attaching…`)
+  process.exit(await handoffToConnect(machine, room.sessionId))
 }
 
 await run(process.argv.slice(2))
