@@ -29,6 +29,8 @@
     <string>{HOME}</string>
     <key>PI_CODING_AGENT_DIR</key>
     <string>{PI_AGENT_DIR}</string>
+    <key>PI_CODING_AGENT_SESSION_DIR</key>
+    <string>{SESSION_DIR}</string>
 {UNBIEN_ENV_PLIST}
   </dict>
 </dict>

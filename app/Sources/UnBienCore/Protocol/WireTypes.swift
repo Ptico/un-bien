@@ -42,7 +42,10 @@ public enum ActionName: String, Codable, Sendable {
 }
 
 /// One model entry in the app's model picker (`models_list`).
-public struct WireModel: Codable, Equatable, Sendable {
+/// Hashable so the model picker can key ForEach rows by `\.self`: stable
+/// identity across roster refreshes (an offset-keyed rebuild snaps the open
+/// menu back to the top whenever a late `models_list` reply reorders entries).
+public struct WireModel: Codable, Equatable, Hashable, Sendable {
     public let id: String
     public let name: String
     public let provider: String

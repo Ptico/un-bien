@@ -650,7 +650,10 @@ struct TranscriptView: View {
                                 Task { await model.setModel(pick, session: session) }
                             }
                         )) {
-                            ForEach(Array(models.enumerated()), id: \.offset) { _, entry in
+                            // Key by model, not offset: an offset key makes every
+                            // roster refresh rebuild all rows (snap the open menu
+                            // back to the top); .self identity diffs smoothly.
+                            ForEach(models, id: \.self) { entry in
                                 // Include provider so same-named models from different
                                 // providers are distinguishable in the picker.
                                 Text("\(entry.name) — \(entry.provider)")

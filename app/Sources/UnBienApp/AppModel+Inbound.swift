@@ -82,7 +82,11 @@ extension AppModel {
                let line = String(data: data, encoding: .utf8),
                let decoded = try? Codec.decodeServer(line),
                case let .modelsList(_, models, current) = decoded {
-                availableModels[key] = models
+                // Assign only on real change: an identical re-reply must not
+                // churn @Published and rebuild the open model menu.
+                if availableModels[key] != models {
+                    availableModels[key] = models
+                }
                 if let current { currentModel[key] = current }
                 let curName = current?.name ?? "nil"
                 log.notice("models reply key=\(String(key.suffix(12)), privacy: .public) n=\(models.count, privacy: .public) cur=\(curName, privacy: .public)")
