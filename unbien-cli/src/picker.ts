@@ -1,18 +1,72 @@
 /**
  * Session picker built on pi's own `SelectList` — arrow-key highlight,
  * type-to-filter, and pi's list theme, rather than "enter a number".
+ *
+ * Rendering goes to stderr (raw mode) so stdout stays clean for transcripts.
+ * Input: readline keypress events — arrows/enter/escape feed SelectList's own
+ * handleInput (its keybindings decode the escape sequences); printable chars
+ * drive type-to-filter. The legacy raw-"data" parsing ignored multi-byte
+ * escape sequences entirely, which is why arrows never moved.
  */
 import { getSelectListTheme, initTheme } from "@earendil-works/pi-coding-agent"
 import { SelectList, type SelectItem } from "@earendil-works/pi-tui"
+import { emitKeypressEvents } from "node:readline"
 import type { RoomInfo } from "./client.js"
 
 const MAX_VISIBLE = 12
 
+let themeInitialized = false
+
+/** The SDK's theme must be initialized before any get*Theme() call; the CLI
+ *  has no interactive theme bootstrapping, so the default (no name) it is. */
+function ensureTheme(): void {
+  if (themeInitialized) return
+  initTheme()
+  themeInitialized = true
+}
+
 /**
- * `SelectList.setFilter` prefix-matches on `value`, so the value must be what a
- * person would type — the session name, not its routing id. Names are not
- * unique, so collisions get a short session-id suffix to stay addressable.
+ * Shared keypress wiring for the pickers: arrows/enter/escape feed the list's
+ * own handleInput (keybindings decode the raw sequences); printable chars
+ * drive type-to-filter; backspace trims; Ctrl-C cancels. Registers on the
+ * input stream; returns the unsubscribe (finish must call it).
+ * `paint(filter)` re-renders after any filter change.
  */
+function wireKeys(
+  input: NodeJS.ReadStream,
+  list: { handleInput(data: string): void; setFilter(filter: string): void },
+  paint: (filter: string) => void,
+  finish: (value: null) => void,
+): () => void {
+  emitKeypressEvents(input)
+  let filter = ""
+  const onKeypress = (
+    str: string,
+    key: { name?: string; ctrl?: boolean; meta?: boolean },
+  ): void => {
+    if (key?.ctrl && key.name === "c") return finish(null)
+    if (key?.name === "up") return list.handleInput("\x1b[A")
+    if (key?.name === "down") return list.handleInput("\x1b[B")
+    if (key?.name === "return") return list.handleInput("\r")
+    if (key?.name === "escape") return list.handleInput("\x1b")
+    if (key?.name === "backspace") {
+      filter = filter.slice(0, -1)
+      list.setFilter(filter)
+      paint(filter)
+      return
+    }
+    if (str && str >= " " && !key?.ctrl && !key?.meta) {
+      filter += str
+      list.setFilter(filter)
+      paint(filter)
+    }
+  }
+  input.on("keypress", onKeypress)
+  return () => input.off("keypress", onKeypress)
+}
+
+/** Build picker items from session rooms: name (or id), deduped with a short
+ *  session-id suffix so same-named sessions stay addressable. */
 function buildItems(rooms: readonly RoomInfo[]): {
   items: SelectItem[]
   byValue: Map<string, RoomInfo>
@@ -41,16 +95,6 @@ function buildItems(rooms: readonly RoomInfo[]): {
  * Renders on stderr in raw mode so stdout stays clean for the transcript.
  * Resolves to the chosen session, or null if cancelled.
  */
-let themeInitialized = false
-
-/** The SDK's theme must be initialized before any get*Theme() call; the CLI
- *  has no interactive theme bootstrapping, so the default (no name) it is. */
-function ensureTheme(): void {
-  if (themeInitialized) return
-  initTheme()
-  themeInitialized = true
-}
-
 export function pickSession(
   rooms: readonly RoomInfo[],
 ): Promise<RoomInfo | null> {
@@ -61,10 +105,9 @@ export function pickSession(
   const input = process.stdin
   const output = process.stderr
   const width = output.columns ?? 100
-  let filter = ""
   let lastHeight = 0
 
-  const paint = () => {
+  const paint = (filter = "") => {
     if (lastHeight > 0) output.write(`\u001b[${lastHeight}A`)
     const lines = [
       `  filter: ${filter}\u001b[K`,
@@ -76,7 +119,7 @@ export function pickSession(
 
   return new Promise((resolve) => {
     const finish = (room: RoomInfo | null) => {
-      input.off("data", onData)
+      offKeys()
       if (input.isTTY) input.setRawMode(false)
       // Deliberately NOT paused: the shell takes stdin over next, and a paused
       // stream there is a prompt box that renders but never sees a keystroke.
@@ -84,34 +127,12 @@ export function pickSession(
       resolve(room)
     }
 
+    const offKeys = wireKeys(input, list, paint, () => finish(null))
+
     list.onSelect = (item) => finish(byValue.get(item.value) ?? null)
     list.onCancel = () => finish(null)
 
-    const onData = (chunk: Buffer) => {
-      const data = chunk.toString("utf8")
-      if (data === "\u0003") {
-        finish(null)
-        return
-      }
-      if (data === "\u007f" || data === "\b") {
-        filter = filter.slice(0, -1)
-        list.setFilter(filter)
-      } else if (/^[\x20-\x7e]+$/.test(data)) {
-        filter += data
-        list.setFilter(filter)
-      } else {
-        list.handleInput(data)
-      }
-      paint()
-    }
-
-    output.write(
-      "Select a session (↑/↓ move · type to filter · enter · esc)\n\n",
-    )
-    output.write("\u001b[?25l")
     if (input.isTTY) input.setRawMode(true)
-    input.resume()
-    input.on("data", onData)
     paint()
   })
 }
@@ -128,10 +149,9 @@ export function pickRaw(items: readonly SelectItem[]): Promise<string | null> {
   const input = process.stdin
   const output = process.stderr
   const width = output.columns ?? 100
-  let filter = ""
   let lastHeight = 0
 
-  const paint = () => {
+  const paint = (filter = "") => {
     if (lastHeight > 0) output.write(`\u001b[${lastHeight}A`)
     const lines = [
       `  filter: ${filter}\u001b[K`,
@@ -143,32 +163,18 @@ export function pickRaw(items: readonly SelectItem[]): Promise<string | null> {
 
   return new Promise((resolve) => {
     const finish = (value: string | null) => {
-      input.off("data", onData)
+      offKeys()
       if (input.isTTY) input.setRawMode(false)
       output.write("\u001b[?25h")
       resolve(value)
     }
 
+    const offKeys = wireKeys(input, list, paint, () => finish(null))
+
     list.onSelect = (item) => finish(item.value)
     list.onCancel = () => finish(null)
 
-    const onData = (chunk: Buffer) => {
-      const data = chunk.toString("utf8")
-      if (data === "\u0003") {
-        finish(null)
-        return
-      }
-      if (data === "\u007f" || data === "\b") {
-        filter = filter.slice(0, -1)
-        list.setFilter(filter)
-      } else if (/^[\x20-\x7e]+$/.test(data)) {
-        filter += data
-        list.setFilter(filter)
-      }
-    }
-
     if (input.isTTY) input.setRawMode(true)
-    input.on("data", onData)
     paint()
   })
 }
