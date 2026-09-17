@@ -2,7 +2,7 @@
  * Session picker built on pi's own `SelectList` — arrow-key highlight,
  * type-to-filter, and pi's list theme, rather than "enter a number".
  */
-import { getSelectListTheme } from "@earendil-works/pi-coding-agent"
+import { getSelectListTheme, initTheme } from "@earendil-works/pi-coding-agent"
 import { SelectList, type SelectItem } from "@earendil-works/pi-tui"
 import type { RoomInfo } from "./client.js"
 
@@ -41,9 +41,20 @@ function buildItems(rooms: readonly RoomInfo[]): {
  * Renders on stderr in raw mode so stdout stays clean for the transcript.
  * Resolves to the chosen session, or null if cancelled.
  */
+let themeInitialized = false
+
+/** The SDK's theme must be initialized before any get*Theme() call; the CLI
+ *  has no interactive theme bootstrapping, so the default (no name) it is. */
+function ensureTheme(): void {
+  if (themeInitialized) return
+  initTheme()
+  themeInitialized = true
+}
+
 export function pickSession(
   rooms: readonly RoomInfo[],
 ): Promise<RoomInfo | null> {
+  ensureTheme()
   const { items, byValue } = buildItems(rooms)
   const list = new SelectList(items, MAX_VISIBLE, getSelectListTheme())
 
@@ -111,6 +122,7 @@ export function pickSession(
  * Resolves the chosen `value`, or null if cancelled.
  */
 export function pickRaw(items: readonly SelectItem[]): Promise<string | null> {
+  ensureTheme()
   const list = new SelectList([...items], MAX_VISIBLE, getSelectListTheme())
 
   const input = process.stdin
