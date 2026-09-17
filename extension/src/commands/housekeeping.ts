@@ -147,19 +147,28 @@ export function parseInstallTarget(raw: string): InstallTarget | null {
 
 /** Install one or all un-bien components. Async: relay/cli installs spawn
  *  package managers (cargo/npm) that take minutes. Reports each component's
- *  outcome; returns true only if every attempted component succeeded. */
+ *  outcome; returns true only if every attempted component succeeded.
+ *
+ *  Ordering for `all` is launcher → cli → relay: the launcher is a fast,
+ *  purely-local supervisor render + activation (systemd/launchd) that prints
+ *  its confirmation immediately — matching what the user sees on a working
+ *  mac install. The relay goes LAST because on a fresh Linux box it may
+ *  compile via cargo for minutes; doing it first made the whole command look
+ *  dead ("installing…" then silence) while the systemd units never appeared.
+ *
+ *  Every step streams to ctx.ui.notify as it happens — nothing is buffered
+ *  until the end (the CLI path already printed live; the TUI path must too). */
 export async function _cmdInstallTarget(
   ctx: Pick<ExtensionContext, "ui">,
   target: InstallTarget,
   opts: { linkCli?: boolean } = {},
 ): Promise<boolean> {
   const linkCli = opts.linkCli ?? false
-  const results: string[] = []
   let ok = true
 
   const want =
     target === "all"
-      ? (["relay", "launcher", "cli"] as const)
+      ? (["launcher", "cli", "relay"] as const)
       : ([target] as const)
 
   for (const component of want) {
@@ -187,31 +196,41 @@ export async function _cmdInstallTarget(
         ctx.ui.notify("[un-bien] installing relay service…", "info")
         const r = await installRelayService({
           autoInstall: true,
-          onLog: (l) => results.push(`  [relay] ${l}`),
+          // Stream live — a cargo compile takes minutes and the user must
+          // see progress, not silence (this was the "prints nothing" bug).
+          onLog: (l) => ctx.ui.notify(`[un-bien relay] ${l}`, "info"),
         })
-        results.push(
-          `[un-bien] Relay service installed (${r.platform}).`,
-          `  Unit: ${r.unitPath}`,
-          `  Binary: ${r.binary}`,
-          `  Port: ${r.port} (ws://<host>:${r.port})`,
+        ctx.ui.notify(
+          [
+            `[un-bien] Relay service installed (${r.platform}).`,
+            `  Unit: ${r.unitPath}`,
+            `  Binary: ${r.binary}`,
+            `  Port: ${r.port} (ws://<host>:${r.port})`,
+          ].join("\n"),
+          "info",
         )
       } else if (component === "cli") {
         ctx.ui.notify(
           "[un-bien] installing the unbien CLI (npm install -g)…",
           "info",
         )
-        const r = await installCliPackage((l) => results.push(`  [cli] ${l}`))
-        results.push(
+        const r = await installCliPackage((l) =>
+          ctx.ui.notify(`[un-bien cli] ${l}`, "info"),
+        )
+        ctx.ui.notify(
           `[un-bien] CLI installed${r.version ? ` (unbien ${r.version})` : ""}.`,
+          "info",
         )
       }
     } catch (err) {
       ok = false
-      results.push(`[un-bien] ${component} install failed: ${String(err)}`)
+      ctx.ui.notify(
+        `[un-bien] ${component} install failed: ${String(err)}`,
+        "error",
+      )
     }
   }
 
-  if (results.length > 0) ctx.ui.notify(results.join("\n"), "info")
   return ok
 }
 
@@ -221,8 +240,9 @@ export async function _cmdUninstallTarget(
   target: InstallTarget,
   opts: { linkCli?: boolean } = {},
 ): Promise<void> {
+  // Same launcher-first order as install (see _cmdInstallTarget).
   const want =
-    target === "all" ? (["relay", "launcher"] as const) : ([target] as const)
+    target === "all" ? (["launcher", "relay"] as const) : ([target] as const)
 
   // CLI-shim cleanup rides FULL uninstalls only: `uninstall relay` must not
   // delete the unbien-admin binary that invoked it. Component-scoped

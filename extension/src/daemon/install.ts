@@ -371,8 +371,22 @@ export function installService(
     _exec("launchctl", ["bootstrap", `gui/${uid}`, unitPath], log)
     log.push(`activated via launchctl bootstrap gui/${uid}`)
   } else if (plat === "linux") {
-    _exec("systemctl", ["--user", "daemon-reload"], log)
-    _exec("systemctl", ["--user", "enable", "--now", SYSTEMD_UNIT], log)
+    // The 30s timeout in _exec turns a wedged bus into an error; this wrapper
+    // makes it an ACTIONABLE one. Over SSH (no active login session) the user
+    // systemd manager isn't running unless lingering is enabled — the unit file
+    // is already written at this point, so the remedy is one command + retry.
+    try {
+      _exec("systemctl", ["--user", "daemon-reload"], log)
+      _exec("systemctl", ["--user", "enable", "--now", SYSTEMD_UNIT], log)
+    } catch (err) {
+      throw new Error(
+        `${String(err)}\n` +
+          `hint: over SSH (or before first login) there is no user systemd session. ` +
+          `Run 'loginctl enable-linger ${userInfo().username}' once, then re-run install; ` +
+          `the unit is already written at ${unitPath} and can also be started manually ` +
+          `with 'systemctl --user enable --now ${SYSTEMD_UNIT}'.`,
+      )
+    }
     log.push("activated via systemctl --user enable --now")
   } else {
     // windows — Task Scheduler. The action runs `wscript.exe
@@ -503,6 +517,11 @@ function _exec(cmd: string, args: string[], log: string[]): void {
     const out = execFileSync(cmd, args, {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
+      // supervisorctl-grade operations (systemctl daemon-reload / enable --now,
+      // launchctl bootstrap, schtasks) complete in well under a second when the
+      // supervisor is healthy. A timeout turns a wedged user bus into a LOUD
+      // error instead of a silent hang (the Linux "install prints nothing" bug).
+      timeout: 30_000,
     })
     if (out.trim()) log.push(`$ ${cmd} ${args.join(" ")}\n${out.trim()}`)
     else log.push(`$ ${cmd} ${args.join(" ")}`)

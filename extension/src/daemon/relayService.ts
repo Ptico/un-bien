@@ -272,21 +272,48 @@ export async function installRelayService(opts: {
     // vanishes on a machine that never ran the relay.
     mkdirSync(dirname(relayLogPath()), { recursive: true })
     const uid = userInfo().uid
+    // 30s timeouts, same as the Linux systemctl calls below — a wedged
+    // launchd must fail loudly, not hang the install silently.
     try {
-      await execFileAsync("launchctl", ["bootout", `gui/${uid}`, unitPath])
+      await execFileAsync("launchctl", ["bootout", `gui/${uid}`, unitPath], {
+        timeout: 30_000,
+      })
     } catch {
       /* no stale entry — fine */
     }
-    await execFileAsync("launchctl", ["bootstrap", `gui/${uid}`, unitPath])
+    try {
+      await execFileAsync("launchctl", ["bootstrap", `gui/${uid}`, unitPath], {
+        timeout: 30_000,
+      })
+    } catch (err) {
+      throw new Error(
+        `launchctl bootstrap failed — check Console.app for launchd errors for ` +
+          `${unitPath}, or load manually with: launchctl bootstrap gui/${uid} ${unitPath}. ` +
+          `(${String(err)})`,
+      )
+    }
     push(`activated via launchctl bootstrap gui/${uid}`)
   } else {
-    await execFileAsync("systemctl", ["--user", "daemon-reload"])
-    await execFileAsync("systemctl", [
-      "--user",
-      "enable",
-      "--now",
-      RELAY_SYSTEMD_UNIT,
-    ])
+    // 30s timeout each: `systemctl --user` against a missing/wedged user bus
+    // must fail LOUDLY here (surfaced by the caller's per-component catch), not
+    // hang the whole install silently.
+    try {
+      await execFileAsync("systemctl", ["--user", "daemon-reload"], {
+        timeout: 30_000,
+      })
+      await execFileAsync(
+        "systemctl",
+        ["--user", "enable", "--now", RELAY_SYSTEMD_UNIT],
+        { timeout: 30_000 },
+      )
+    } catch (err) {
+      throw new Error(
+        `systemctl --user failed — is a user systemd session available on this ` +
+          `machine? (SSH/headless: run 'loginctl enable-linger ${userInfo().username}'; ` +
+          `WSL: enable systemd in /etc/wsl.conf). Start manually with: ` +
+          `systemctl --user enable --now ${RELAY_SYSTEMD_UNIT}. (${String(err)})`,
+      )
+    }
     push("activated via systemctl --user enable --now")
   }
 
