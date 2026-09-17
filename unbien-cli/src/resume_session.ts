@@ -146,7 +146,17 @@ export async function run(argv: string[]): Promise<void> {
     label: `${s.name ?? s.summary.slice(0, 56)} · ${relTime(s.modified)} · ${s.messageCount} msgs`,
     description: scope === "all" ? s.cwd : undefined,
   }))
-  const picked = await pickRaw(items)
+  // Substring filter over WHAT THE ROWS SHOW (name/summary + cwd) — the
+  // SelectList's own setFilter is prefix-on-value (the path), which never
+  // matches what a person types.
+  const picked = await pickRaw(items, {
+    filter: (filter, all) =>
+      all.filter((it) => {
+        const s = sessions.find((sess) => sess.path === it.value)
+        const hay = `${s?.name ?? ""} ${s?.summary ?? ""} ${s?.cwd ?? ""}`.toLowerCase()
+        return hay.includes(filter.toLowerCase())
+      }),
+  })
   if (!picked) {
     console.error("cancelled.")
     Shell.exitAfterDrain(0)

@@ -34,9 +34,13 @@ function ensureTheme(): void {
  */
 function wireKeys(
   input: NodeJS.ReadStream,
-  list: { handleInput(data: string): void; setFilter(filter: string): void },
+  list: {
+    handleInput(data: string): void
+    setFilter(filter: string): void
+  },
   paint: (filter: string) => void,
   finish: (value: null) => void,
+  applyFilter?: (filter: string) => void,
 ): () => void {
   // pi-tui's own input decoder: buffers split escape sequences and emits
   // COMPLETE sequences — the same decoding pi's TUI pickers rely on. Hand-
@@ -45,17 +49,23 @@ function wireKeys(
   let filter = ""
   buffer.on("data", (sequence: string) => {
     // Navigation + confirm + cancel: the list's keybindings decode sequences.
+    // NAVIGATION MUST REPAINT: handleInput moves the selection internally —
+    // without paint() the highlight moves invisibly (the "arrows don't work"
+    // symptom).
     if (
       sequence === "\x1b[A" ||
-      sequence === "\x1b[B" ||
-      sequence === "\r" ||
-      sequence === "\x1b"
+      sequence === "\x1b[B"
     ) {
+      list.handleInput(sequence)
+      paint(filter)
+      return
+    }
+    if (sequence === "\r" || sequence === "\x1b") {
       return list.handleInput(sequence)
     }
     if (sequence === "\x7f" || sequence === "\b") {
       filter = filter.slice(0, -1)
-      list.setFilter(filter)
+      applyFilter ? applyFilter(filter) : list.setFilter(filter)
       paint(filter)
       return
     }
@@ -63,7 +73,7 @@ function wireKeys(
     // Printable run: type-to-filter (a paste arrives as one chunk).
     if (/^[\x20-\x7e]+$/.test(sequence)) {
       filter += sequence
-      list.setFilter(filter)
+      applyFilter ? applyFilter(filter) : list.setFilter(filter)
       paint(filter)
     }
     // Anything else (mouse, kitty CSI-u, …): silently ignored.
@@ -155,9 +165,35 @@ export function pickSession(
  * chooser reuses this — its rows carry name/summary/recency, not RoomInfo).
  * Resolves the chosen `value`, or null if cancelled.
  */
-export function pickRaw(items: readonly SelectItem[]): Promise<string | null> {
+export function pickRaw(
+  items: readonly SelectItem[],
+  opts?: {
+    /** Substring filter over the caller's semantics (name/summary/cwd) —
+     *  SelectList's own setFilter is prefix-on-value only, which never
+     *  matches what the rows display. Without it, prefix-on-value applies. */
+    filter?: (filter: string, all: readonly SelectItem[]) => SelectItem[]
+  },
+): Promise<string | null> {
   ensureTheme()
+  const all = [...items]
   const list = new SelectList([...items], MAX_VISIBLE, getSelectListTheme())
+
+  // Apply the caller's substring filter by REASSIGNING items — SelectList's
+  // own setFilter is prefix-on-value and can't match displayed text.
+  const applyFilter = (filter: string): void => {
+    if (opts?.filter) {
+      // SAFETY: `items` is a plain instance field at runtime ( SelectList's
+      // `private` is type-only); assigning it is the only way to run a
+      // SUBSTRING filter — the class's own setFilter is prefix-on-value.
+      // Invariant: after this assignment, setFilter("") rebuilds
+      // filteredItems from exactly the filtered set.
+      const mutable = list as unknown as { items: SelectItem[] }
+      mutable.items = filter ? opts.filter(filter, all) : all
+      list.setFilter("") // items already filtered; reset the internal filter
+    } else {
+      list.setFilter(filter)
+    }
+  }
 
   const input = process.stdin
   const output = process.stderr
@@ -182,7 +218,7 @@ export function pickRaw(items: readonly SelectItem[]): Promise<string | null> {
       resolve(value)
     }
 
-    const offKeys = wireKeys(input, list, paint, () => finish(null))
+    const offKeys = wireKeys(input, list, paint, () => finish(null), applyFilter)
 
     list.onSelect = (item) => finish(item.value)
     list.onCancel = () => finish(null)
