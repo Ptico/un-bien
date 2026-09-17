@@ -102,7 +102,7 @@ export async function connectControlRoom(
     roomId: controlRoomFor(machine.epk),
   })
   try {
-    await client.connect()
+    await client.connect({ roomId: controlRoomFor(machine.epk) })
   } catch {
     console.error(`[relay] unreachable: ${relayUrl} (${label})`)
     Shell.exitAfterDrain(1)

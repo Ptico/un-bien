@@ -537,15 +537,44 @@ try {
 
 // A token means this is a first pairing; a remembered machine skips straight
 // to routing, since the extension auto-attaches any peer it already trusts.
+// The verdict is AWAITED: a stale/expired token previously looked successful
+// (rememberPeer ran before the machine's pair_error landed), leaving a peers
+// entry the machine's allow-list never learned — frames silently undeliverable.
 if (invite.token) {
-  client.pair(flags.get("name") ?? "unbien-cli")
+  const deviceName = flags.get("name") ?? "unbien-cli"
+  const verdict = await new Promise<{ ok: boolean; detail?: string }>(
+    (resolve) => {
+      const onControl = (frame: Record<string, unknown>) => {
+        const t = String(frame.type ?? "")
+        if (t === "pair_ok") resolve({ ok: true })
+        else if (t === "pair_error")
+          resolve({
+            ok: false,
+            detail: String(frame.message ?? frame.code ?? "rejected"),
+          })
+      }
+      client.on("control", onControl)
+      client.pair(deviceName)
+      setTimeout(() => {
+        client.off("control", onControl)
+        resolve({
+          ok: false,
+          detail: "timed out — run /unbien pair for a fresh code and retry",
+        })
+      }, 10_000)
+    },
+  )
+  if (!verdict.ok) {
+    console.error(`[pair] machine did not accept the pairing: ${verdict.detail}`)
+    process.exit(1)
+  }
   rememberPeer({
     epk: invite.epk,
     relayUrl,
-    name: flags.get("name") ?? "unbien-cli",
+    name: deviceName,
     pairedAt: new Date().toISOString(),
   })
-  console.error("[paired] machine remembered — future runs need no token")
+  console.error(`[paired] ${deviceName} remembered — future runs need no token`)
 }
 
 // MULTI-RELAY SESSION LISTING: fan out to every relay with paired peers,

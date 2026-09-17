@@ -61,6 +61,15 @@ async function listSessions(
       }
     }
     client.on("ub", onUb)
+    // Relay-level refusals (unknown_peer from the fail-closed content gate)
+    // arrive as TOP-LEVEL typed frames — relayControl, not ub.
+    client.on("relayControl", (frame: Record<string, unknown>) => {
+      if (String(frame.type ?? "") === "error") {
+        console.error(
+          `relay refused the listing: ${String(frame.code)}${frame.peer ? ` (peer ${String(frame.peer).slice(0, 12)}… not in the machine's allow-list?)` : ""}`,
+        )
+      }
+    })
     client.sendUb("sessions_list", { id, ...params })
     setTimeout(() => {
       if (settled) return

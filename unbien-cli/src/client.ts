@@ -87,11 +87,17 @@ export class SessionClient extends EventEmitter<SessionClientEvents> {
     })
   }
 
-  async connect(): Promise<void> {
+  async connect(options?: { roomId?: string }): Promise<void> {
     this.relay.on("message", (line) => this.onLine(line))
     this.relay.on("close", () => this.emit("close"))
-    // No room_id: an owner subscribes to rooms, it does not own one.
-    await this.relay.connect()
+    // No room_id by default: an owner subscribes to rooms, it does not own
+    // one. Daemon-facing verbs (create/resume-session) PASS a roomId — the
+    // relay (0.7.x subscription model) only routes frames between mutual
+    // subscribers of a room, so a roomless client's frames never reach the
+    // daemon's control room (verified: handler never fired, replies timed out).
+    await this.relay.connect(
+      options?.roomId ? { roomId: options.roomId } : undefined,
+    )
   }
 
   /** The one non-envelope frame a client ever sends — nothing exists before it. */
