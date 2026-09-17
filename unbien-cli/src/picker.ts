@@ -10,7 +10,7 @@
  */
 import { getSelectListTheme, initTheme } from "@earendil-works/pi-coding-agent"
 import { SelectList, type SelectItem } from "@earendil-works/pi-tui"
-import { emitKeypressEvents } from "node:readline"
+import { StdinBuffer } from "@earendil-works/pi-tui"
 import type { RoomInfo } from "./client.js"
 
 const MAX_VISIBLE = 12
@@ -38,31 +38,44 @@ function wireKeys(
   paint: (filter: string) => void,
   finish: (value: null) => void,
 ): () => void {
-  emitKeypressEvents(input)
+  // pi-tui's own input decoder: buffers split escape sequences and emits
+  // COMPLETE sequences — the same decoding pi's TUI pickers rely on. Hand-
+  // parsing raw "data" chunks loses arrows whenever ESC and [A arrive apart.
+  const buffer = new StdinBuffer()
   let filter = ""
-  const onKeypress = (
-    str: string,
-    key: { name?: string; ctrl?: boolean; meta?: boolean },
-  ): void => {
-    if (key?.ctrl && key.name === "c") return finish(null)
-    if (key?.name === "up") return list.handleInput("\x1b[A")
-    if (key?.name === "down") return list.handleInput("\x1b[B")
-    if (key?.name === "return") return list.handleInput("\r")
-    if (key?.name === "escape") return list.handleInput("\x1b")
-    if (key?.name === "backspace") {
+  buffer.on("data", (sequence: string) => {
+    // Navigation + confirm + cancel: the list's keybindings decode sequences.
+    if (
+      sequence === "\x1b[A" ||
+      sequence === "\x1b[B" ||
+      sequence === "\r" ||
+      sequence === "\x1b"
+    ) {
+      return list.handleInput(sequence)
+    }
+    if (sequence === "\x7f" || sequence === "\b") {
       filter = filter.slice(0, -1)
       list.setFilter(filter)
       paint(filter)
       return
     }
-    if (str && str >= " " && !key?.ctrl && !key?.meta) {
-      filter += str
+    if (sequence === "\x03") return finish(null)
+    // Printable run: type-to-filter (a paste arrives as one chunk).
+    if (/^[\x20-\x7e]+$/.test(sequence)) {
+      filter += sequence
       list.setFilter(filter)
       paint(filter)
     }
+    // Anything else (mouse, kitty CSI-u, …): silently ignored.
+  })
+  const onData = (chunk: Buffer | string): void => {
+    buffer.process(typeof chunk === "string" ? chunk : chunk.toString("utf8"))
   }
-  input.on("keypress", onKeypress)
-  return () => input.off("keypress", onKeypress)
+  input.on("data", onData)
+  return () => {
+    input.off("data", onData)
+    buffer.destroy()
+  }
 }
 
 /** Build picker items from session rooms: name (or id), deduped with a short
