@@ -15,6 +15,7 @@ import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { dirname, join } from "node:path"
 import { startLauncher } from "../launcher/launcher.js"
+import { envLog } from "../session/debug_log.js"
 
 /** Package version for --version reporting (the deploy-stale-binary trap
  *  makes "which build is running" the first diagnostic question). */
