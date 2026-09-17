@@ -153,7 +153,7 @@ async function listAllSessions(
             clients.set(relayUrl, client)
           } catch {
             deadRelays.push(relayLabelFor(relayUrl))
-            return
+            return // unreachable relay: skip this group
           }
         }
         const label = relayLabelFor(relayUrl)
