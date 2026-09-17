@@ -122,6 +122,10 @@ export async function startLauncher(
     if (env.ub === undefined) return
     const frame = env.ub as Record<string, unknown>
     envLog(`launcher ub frame: type=${String(frame.type)} peer=${peer}`)
+    // This handler runs async-void: an uncaught throw here would kill the
+    // whole daemon with no trace. Log EVERYTHING, answer with the daemon's
+    // error frame, and stay alive.
+    try {
 
     if (frame.type === "presence_status") {
       sender.sendEnvelope({
@@ -170,7 +174,23 @@ export async function startLauncher(
             messageCount: s.messageCount,
           }))
         }
-      const all = await (sessionsLister ?? defaultLister)()
+      // A lister throw must NOT kill the daemon (this handler runs async-void
+      // — an unhandled rejection exits node): reply with the daemon's standard
+      // error frame (same inner shape as unknown_peer / permission_denied).
+      let all
+      try {
+        all = await (sessionsLister ?? defaultLister)()
+      } catch (err) {
+        const detail = String(err instanceof Error ? err.message : err).slice(0, 200)
+        envLog(`sessions_list: lister failed: ${detail}`)
+        sender.send({
+          type: "error",
+          code: "list_failed",
+          message: detail,
+          in_reply_to: typeof frame.id === "string" ? frame.id : "",
+        })
+        return
+      }
       envLog(`sessions_list: ${all.length} sessions (scope=${String(frame.scope)})`)
       const filter =
         typeof frame.filter === "string" && frame.filter.trim().length > 0
@@ -246,6 +266,19 @@ export async function startLauncher(
         : undefined,
     )
     if (launchError) envLog(`launcher session_launch error: ${launchError}`)
+    } catch (err) {
+      const detail = String(err instanceof Error ? err.message : err).slice(0, 200)
+      envLog(`launcher ub frame FAILED (${String(frame.type)}): ${detail}`)
+      try {
+        sender.send({
+          type: "error",
+          code: "handler_failed",
+          message: detail,
+        })
+      } catch {
+        /* relay down — the log line above is the record */
+      }
+    }
   }
 
   async function gateAndAttach(
@@ -327,8 +360,13 @@ export async function startLauncher(
   }
 
   async function connectOnce(): Promise<void> {
+    envLog(`connectOnce: dialing ${relayUrl} (room ${roomId})`)
     const r = new RelayClient(relayUrl, kp)
     relay = r
+    
+    setTimeout(() => {
+      if (relay === r) envLog("connectOnce: STILL PENDING after 10s (ws state visible via lsof)")
+    }, 10_000).unref()
     r.on("message", (line: string) => onMsg(r, line))
     r.on("close", () => {
       channels.clear()

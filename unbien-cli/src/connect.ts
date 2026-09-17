@@ -162,6 +162,7 @@ async function listAllSessions(
           choices.push({ ...room, relayUrl, relayLabel: label })
         }
       }
+      return // explicit: this callback is a Promise.all worker
     }),
   )
 

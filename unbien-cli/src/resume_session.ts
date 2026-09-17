@@ -43,6 +43,14 @@ async function listSessions(
   return new Promise((resolve) => {
     let settled = false
     function onUb(frame: Record<string, unknown>): void {
+      try {
+        handle(frame)
+      } catch (err) {
+        // A malformed frame must not crash the verb mid-wait.
+        console.error(`frame handling error (ignored): ${String(err).slice(0, 120)}`)
+      }
+    }
+    function handle(frame: Record<string, unknown>): void {
       if (settled) return
       const type = String(frame.type ?? "")
       if (type === "error") {
@@ -61,15 +69,24 @@ async function listSessions(
       }
     }
     client.on("ub", onUb)
-    // Relay-level refusals (unknown_peer from the fail-closed content gate)
-    // arrive as TOP-LEVEL typed frames — relayControl, not ub.
-    client.on("relayControl", (frame: Record<string, unknown>) => {
+    // Errors arrive on TWO other surfaces, both terminal for this request:
+    //  - control: the daemon's own error frames (unknown_peer, list_failed…)
+    //  - relayControl: relay-level refusals (fail-closed content gate)
+    const onError = (frame: Record<string, unknown>) => {
+      if (settled) return
       if (String(frame.type ?? "") === "error") {
+        settled = true
+        client.off("ub", onUb)
+        client.off("control", onError)
+        client.off("relayControl", onError)
         console.error(
-          `relay refused the listing: ${String(frame.code)}${frame.peer ? ` (peer ${String(frame.peer).slice(0, 12)}… not in the machine's allow-list?)` : ""}`,
+          `machine refused the listing: ${String(frame.code)} — ${String(frame.message ?? "").slice(0, 120)}`,
         )
+        resolve([])
       }
-    })
+    }
+    client.on("control", onError)
+    client.on("relayControl", onError)
     client.sendUb("sessions_list", { id, ...params })
     setTimeout(() => {
       if (settled) return
@@ -100,7 +117,10 @@ export async function run(argv: string[]): Promise<void> {
   const label = machine.name ?? machine.epk.slice(0, 12)
   const client = await connectControlRoom(machine, flags.get("relay"))
 
-  const scope: "cwd" | "all" = flags.get("all") ? "all" : "cwd"
+  // Default GLOBAL: bare `resume-session` must not depend on the daemon's
+  // cwd (under launchd that's "/", and scoping to it is meaningless — and
+  // was crashing the daemon's lister). --dir opts into directory scope.
+  const scope: "cwd" | "all" = flags.get("dir") && !flags.get("all") ? "cwd" : "all"
   const cwd = flags.get("dir") || undefined
   const filter = flags.get("filter") || undefined
   console.error(

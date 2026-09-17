@@ -69,6 +69,24 @@ export async function launchAndWait(
   return new Promise((resolve) => {
     let settled = false
     const onUb = (frame: Record<string, unknown>) => {
+      try {
+        if (settled) return
+        if (String(frame.type ?? "") === "error") {
+          settled = true
+          resolve({
+            ok: false,
+            note: String(frame.message ?? frame.code ?? "launch rejected"),
+          })
+        }
+      } catch (err) {
+        // A malformed frame must not crash the verb mid-wait.
+        console.error(`frame handling error (ignored): ${String(err).slice(0, 120)}`)
+      }
+    }
+    client.on("ub", onUb as (frame: Record<string, unknown>) => void)
+    // Daemon errors ride control; relay refusals ride relayControl — both
+    // terminal for the launch (they'd otherwise read as a silent timeout).
+    const onError = (frame: Record<string, unknown>) => {
       if (settled) return
       if (String(frame.type ?? "") === "error") {
         settled = true
@@ -78,7 +96,8 @@ export async function launchAndWait(
         })
       }
     }
-    client.on("ub", onUb as (frame: Record<string, unknown>) => void)
+    client.on("control", onError)
+    client.on("relayControl", onError)
     client.sendUb("session_launch", params)
     setTimeout(() => {
       if (settled) return
