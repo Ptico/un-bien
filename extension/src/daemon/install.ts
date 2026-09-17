@@ -221,6 +221,8 @@ export interface RenderVars {
   logPath: string
   /** PI agent config dir snapshot (see defaultRenderVars). */
   piAgentDir: string
+  /** Pi session storage dir snapshot (env PI_CODING_AGENT_SESSION_DIR). */
+  sessionDir: string
   /** Pre-rendered UNBIEN_* env entries, plist XML form. */
   unbienEnvPlist: string
   /** Pre-rendered UNBIEN_* env entries, systemd unit form. */
@@ -242,6 +244,9 @@ export function defaultRenderVars(): RenderVars {
     piAgentDir:
       process.env["PI_CODING_AGENT_DIR"] ??
       join(homedir(), ".config", "pi", "agent"),
+    // The daemon lists stored sessions — it must read the SAME session store
+    // the user's pi writes (the env session dir, when set).
+    sessionDir: process.env["PI_CODING_AGENT_SESSION_DIR"] ?? "",
     // Pre-rendered <key>/<string> pairs for every UNBIEN_* var in the
     // installing environment (relay URL, state dir overrides, …) so the
     // services see the same config resolution as the user's shell.
@@ -261,6 +266,7 @@ export function renderTemplate(template: string, vars: RenderVars): string {
     .replace(/\{VBS\}/g, vars.vbs)
     .replace(/\{LOG\}/g, vars.logPath)
     .replace(/\{PI_AGENT_DIR\}/g, vars.piAgentDir)
+    .replace(/\{SESSION_DIR\}/g, vars.sessionDir)
     .replace(/\{UNBIEN_ENV_PLIST\}/g, vars.unbienEnvPlist)
     .replace(/\{UNBIEN_ENV_SYSTEMD\}/g, vars.unbienEnvSystemd)
 }

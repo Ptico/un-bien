@@ -162,8 +162,18 @@ export async function startLauncher(
             typeof frame.cwd === "string" && frame.cwd.length > 0
               ? _expandTilde(frame.cwd)
               : process.cwd()
+          // Session dir resolution MUST mirror pi's CLI (main.js): the env
+          // session dir wins — the default agentDir/sessions is a DIFFERENT
+          // store from what the user's pi actually writes (found live: 4
+          // sessions in agentDir/sessions vs 475 in PI_CODING_AGENT_SESSION_DIR).
+          const envSessionDir = process.env.PI_CODING_AGENT_SESSION_DIR
+          const sessionDir = envSessionDir
+            ? _expandTilde(envSessionDir)
+            : undefined
           const found =
-            scope === "all" ? await SessionManager.listAll() : await SessionManager.list(cwd)
+            scope === "all"
+              ? await SessionManager.listAll(sessionDir)
+              : await SessionManager.list(cwd, sessionDir)
           return found.map((s) => ({
             path: s.path,
             id: s.id,
@@ -311,16 +321,13 @@ export async function startLauncher(
       r,
       peer,
       ownerRoom, // replies route to the OWNER's room, not our control room
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      true, // includeRoomInOuter
       (msg) => handleStockMessage(msg, channel), // liveness ping->pong
       () => channels.delete(peer),
       (env) => {
         void handleUbFrame(env, channel, peer)
       },
+      undefined, // sessionIdProvider
+      true, // includeRoomInOuter
     )
     channels.set(peer, channel)
     // Advertise machine caps up front so the app enables its launch control for
@@ -336,7 +343,7 @@ export async function startLauncher(
   }
 
   function onMsg(r: RelayClient, line: string): void {
-    let outer: { peer?: string; ct?: string }
+    let outer: { peer?: string; room?: string; ct?: string }
     try {
       outer = JSON.parse(line) as { peer?: string; ct?: string }
     } catch {
@@ -374,20 +381,39 @@ export async function startLauncher(
     envLog(`connectOnce: dialing ${relayUrl} (room ${roomId})`)
     const r = new RelayClient(relayUrl, kp)
     relay = r
-    
-    setTimeout(() => {
-      if (relay === r) envLog("connectOnce: STILL PENDING after 10s (ws state visible via lsof)")
-    }, 10_000).unref()
+    // CONNECT TIMEOUT: a hung r.connect (observed once under launchd — the
+    // promise pending forever with no I/O and no error) must convert to a
+    // retry, not a permanent silent stall. 15s: generous enough for slow
+    // starts, tight enough that a dead relay costs ~2 retries/min.
+    let connectTimedOut = false
+    const connectTimer = setTimeout(() => {
+      connectTimedOut = true
+      try {
+        r.close()
+      } catch {
+        /* already closed */
+      }
+    }, 15_000)
+    connectTimer.unref()
     r.on("message", (line: string) => onMsg(r, line))
     r.on("close", () => {
       channels.clear()
       if (!stopped) scheduleReconnect()
     })
-    await r.connect({
-      roomId,
-      // caps ride room_meta so the app filters the control room from the announce.
-      roomMeta: { name: hostname(), cwd: homedir(), caps: [...DAEMON_CAPS] },
-    })
+    try {
+      await r.connect({
+        roomId,
+        // caps ride room_meta so the app filters the control room from the announce.
+        roomMeta: { name: hostname(), cwd: homedir(), caps: [...DAEMON_CAPS] },
+      })
+    } finally {
+      clearTimeout(connectTimer)
+    }
+    if (connectTimedOut) {
+      // The close() above surfaces as a connect failure/rejection upstream;
+      // belt-and-braces in case the close raced a late resolve.
+      throw new Error("relay connect timed out after 15s")
+    }
     // ALLOW-LIST PARITY (design 01M23MKVG + 01M23MB5D): the launcher is the
     // machine's THIRD connect path but the ONLY one live on a pi-less machine —
     // without its own signed pairing_set push, a fresh relay (or wiped DB)

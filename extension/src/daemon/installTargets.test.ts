@@ -51,6 +51,7 @@ const relayVars: RelayRenderVars = {
   home: "/Users/tester",
   logPath: "/Users/tester/.local/state/un-bien/relay.log",
   piAgentDir: "/Users/tester/.config/pi/agent",
+  sessionDir: "/Users/tester/.local/share/pi",
   unbienEnvPlist: "",
   unbienEnvSystemd: "",
 }

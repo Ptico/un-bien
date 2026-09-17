@@ -127,6 +127,7 @@ describe("renderTemplate", () => {
     vbs: "/Users/x/.local/state/un-bien/RemotePiLauncherRun.vbs",
     logPath: "/Users/x/.local/state/un-bien/launcher.log",
     piAgentDir: "/Users/x/.config/pi/agent",
+    sessionDir: "/Users/x/.local/share/pi",
     unbienEnvPlist: "",
     unbienEnvSystemd: "",
   }

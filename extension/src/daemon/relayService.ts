@@ -152,6 +152,8 @@ export interface RelayRenderVars {
   /** Pre-rendered UNBIEN_* env entries (see install.ts helpers). */
   unbienEnvPlist: string
   unbienEnvSystemd: string
+  /** Pi session storage dir snapshot (parity with the launcher's env). */
+  sessionDir: string
 }
 
 export function renderRelayTemplate(
@@ -166,6 +168,7 @@ export function renderRelayTemplate(
     .replace(/\{PI_AGENT_DIR\}/g, vars.piAgentDir)
     .replace(/\{UNBIEN_ENV_PLIST\}/g, vars.unbienEnvPlist)
     .replace(/\{UNBIEN_ENV_SYSTEMD\}/g, vars.unbienEnvSystemd)
+    .replace(/\{SESSION_DIR\}/g, vars.sessionDir)
 }
 
 function relayTemplatePath(kind: "launchd" | "systemd"): string {
@@ -247,6 +250,7 @@ export async function installRelayService(opts: {
       join(homedir(), ".config", "pi", "agent"),
     unbienEnvPlist: renderUnbienEnvPlist(),
     unbienEnvSystemd: renderUnbienEnvSystemd(),
+    sessionDir: process.env.PI_CODING_AGENT_SESSION_DIR ?? "",
   }
   const tplPath = relayTemplatePath(
     platform === "macos" ? "launchd" : "systemd",
