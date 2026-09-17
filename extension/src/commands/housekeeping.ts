@@ -164,6 +164,18 @@ export async function _cmdInstallTarget(
 
   for (const component of want) {
     if (component === "launcher") {
+      // Headless-service identity: the daemon cannot interact with keychain
+      // UI (a launchd context hang was observed) — pin the keypair to the
+      // file backend before the service starts. Key UNCHANGED.
+      try {
+        const { provisionFileIdentity } = await import("../pairing/storage.js")
+        const { saveConfig } = await import("../config.js")
+        const { path, wrote } = await provisionFileIdentity()
+        saveConfig({ identity: { storage: "file" } })
+        if (wrote) ctx.ui.notify(`[un-bien] identity pinned to ${path} (file storage)`, "info")
+      } catch (err) {
+        ctx.ui.notify(`[un-bien] identity provisioning failed: ${String(err)}`, "error")
+      }
       // Reuses the sync path: the launcher unit render + bootstrap is local
       // and fast (no package manager involved).
       const done = _cmdInstall(ctx, { linkCli })

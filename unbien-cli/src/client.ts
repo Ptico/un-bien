@@ -200,6 +200,12 @@ export class SessionClient extends EventEmitter<SessionClientEvents> {
     this.sendEnvelope({ ub: frame as EnvelopeMessage["ub"] })
   }
 
+  /** Re-target the client at a room discovered post-connect (e.g. the
+   *  launcher daemon's control room, found by its is_daemon capability). */
+  setRoom(roomId: string): void {
+    this.room = roomId
+  }
+
   /** Drive the agent. `prompt` is pi's own rpc verb — no invented hop. */
   prompt(message: string): void {
     this.sendEnvelope({

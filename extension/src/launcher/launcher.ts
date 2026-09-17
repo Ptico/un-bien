@@ -285,6 +285,7 @@ export async function startLauncher(
     r: RelayClient,
     peer: string,
     firstInner: unknown,
+    ownerRoom: string,
   ): Promise<void> {
     const known = await _findKnownPeer(peer)
     if (!known) {
@@ -309,7 +310,12 @@ export async function startLauncher(
     const channel = new PlainPeerChannel(
       r,
       peer,
-      roomId,
+      ownerRoom, // replies route to the OWNER's room, not our control room
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      true, // includeRoomInOuter
       (msg) => handleStockMessage(msg, channel), // liveness ping->pong
       () => channels.delete(peer),
       (env) => {
@@ -338,6 +344,11 @@ export async function startLauncher(
     }
     if (!outer.peer || !outer.ct) return
     if (channels.has(outer.peer)) return // its PlainPeerChannel handles routing
+    // The relay rewrites outer.room to the SENDER's registered room — the
+    // reply-to address for this owner (CLI: its control-room join; the app:
+    // its roomless/main registration). Replies must mirror it per-channel.
+    const senderRoom = outer.room
+    if (!senderRoom) return
 
     let inner: unknown
     try {
@@ -346,7 +357,7 @@ export async function startLauncher(
       return
     }
     if (!inner || typeof inner !== "object") return
-    void gateAndAttach(r, outer.peer, inner)
+    void gateAndAttach(r, outer.peer, inner, senderRoom)
   }
 
   function scheduleReconnect(): void {

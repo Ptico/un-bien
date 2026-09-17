@@ -45,6 +45,7 @@ interface OuterEnvelope {
  */
 export class PlainPeerChannel implements PeerChannel {
   private readonly _unsubscribe: () => void
+  private readonly _myRoomId: string | undefined
 
   constructor(
     private readonly relay: RelayClient,
@@ -67,7 +68,14 @@ export class PlainPeerChannel implements PeerChannel {
     /** Supplies the SENDING session's pi sessionId, stamped on every outbound
      *  envelope so the app keys per-session state by the pi id (not the room). */
     private readonly sessionIdProvider?: () => string | undefined,
+    /** Re-enable the forward-compat room stamp: outbound outer envelopes
+     *  carry `room: myRoomId`. Required for hosts whose reply routing needs
+     *  the (peer, room) pair to match a registered connection — e.g. the
+     *  launcher daemon, whose control room is NOT the relay default. The
+     *  session-extension path stays on the legacy roomless form. */
+    private readonly includeRoomInOuter?: boolean,
   ) {
+    this._myRoomId = myRoomId
     const listener = (line: string) => this._onLine(line)
     relay.on("message", listener)
     this._unsubscribe = () => relay.off("message", listener)
@@ -83,7 +91,11 @@ export class PlainPeerChannel implements PeerChannel {
     // (W1.C) accept the field. Multi-Pi multiplexing already works via
     // `room_id`/`room_meta` in the WS-level `hello` — outer routing stays by
     // `peer` alone. Re-add the field once downstream is ready.
-    const outer: OuterEnvelope = { peer: this.remotePeerId, ct }
+    const outer: OuterEnvelope = {
+      peer: this.remotePeerId,
+      ...(this.includeRoomInOuter ? { room: this._myRoomId } : {}),
+      ct,
+    }
     // Best-effort delivery. The relay WS can be mid-reconnect (idle/NAT drop, or
     // a session_new/session-replacement teardown) when we push a server→app frame
     // — notably the action_ok/action_error ack a handler emits right after
@@ -153,7 +165,11 @@ export class PlainPeerChannel implements PeerChannel {
       sessionId: env.sessionId ?? this.sessionIdProvider?.(),
     }
     const ct = Buffer.from(JSON.stringify(wire)).toString("base64")
-    const outer: OuterEnvelope = { peer: this.remotePeerId, ct }
+    const outer: OuterEnvelope = {
+      peer: this.remotePeerId,
+      ...(this.includeRoomInOuter ? { room: this._myRoomId } : {}),
+      ct,
+    }
     return JSON.stringify(outer)
   }
 

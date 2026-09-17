@@ -1,4 +1,4 @@
-import { writeFileSync } from "node:fs"
+import { existsSync, writeFileSync } from "node:fs"
 import { mkdir, readFile, writeFile, chmod, unlink } from "node:fs/promises"
 import { dirname, join } from "node:path"
 import {
@@ -474,6 +474,31 @@ function _isENOENT(err: unknown): boolean {
     "code" in err &&
     (err as { code?: unknown }).code === "ENOENT"
   )
+}
+
+
+/**
+ * Headless-service provisioning (launchd/systemd daemons cannot interact with
+ * keychain UI): pin the machine keypair to the FILE backend so daemon contexts
+ * resolve it without keychain access. Writes `identity.json` (0600) when
+ * absent; the caller sets `identity.storage: "file"` alongside. The key is
+ * UNCHANGED — this only adds a second read path for the same identity.
+ */
+export async function provisionFileIdentity(): Promise<{ path: string; wrote: boolean }> {
+  const kp = await getOrCreateEd25519Keypair()
+  const path = _identityFilePath()
+  if (!existsSync(path)) {
+    writeFileSync(
+      path,
+      JSON.stringify({
+        pk: Buffer.from(kp.publicKey).toString("base64"),
+        sk: Buffer.from(kp.secretKey).toString("base64"),
+      }),
+      { mode: 0o600 },
+    )
+    return { path, wrote: true }
+  }
+  return { path, wrote: false }
 }
 
 // ── env override ────────────────────────────────────────────────────────────

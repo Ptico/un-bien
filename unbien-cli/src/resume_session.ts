@@ -68,7 +68,13 @@ async function listSessions(
         resolve(Array.isArray(frame.sessions) ? (frame.sessions as StoredSession[]) : [])
       }
     }
-    client.on("ub", onUb)
+    // The reply is a ub-FRAMED envelope — SessionClient emits those on
+    // "envelope" (raw inner frames land on "control", relay refusals on
+    // "relayControl"; both handled above via onError).
+    const onEnvelope = (env: { ub?: Record<string, unknown> }) => {
+      if (env.ub) onUb(env.ub)
+    }
+    client.on("envelope", onEnvelope)
     // Errors arrive on TWO other surfaces, both terminal for this request:
     //  - control: the daemon's own error frames (unknown_peer, list_failed…)
     //  - relayControl: relay-level refusals (fail-closed content gate)

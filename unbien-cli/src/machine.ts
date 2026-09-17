@@ -127,5 +127,14 @@ export async function connectControlRoom(
     Shell.exitAfterDrain(1)
     process.exit(1)
   }
+
+  // DISCOVER the daemon's control room from its announce (caps include
+  // is_daemon) instead of deriving it from the stored epk — derivation
+  // silently targets the wrong room whenever the stored key and the
+  // machine's live key disagree in form or vintage.
+  const rooms = await client.listRooms()
+  const daemonRoom = rooms.find((r) => (r.caps ?? []).includes("is_daemon"))
+  if (daemonRoom) client.setRoom(daemonRoom.room_id)
+
   return client
 }
