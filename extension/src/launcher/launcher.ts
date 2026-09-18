@@ -22,7 +22,7 @@ import {
   loadLocalConfig,
   effectiveAllowRemoteLaunch,
 } from "../session/local_config.js"
-import { envLog } from "../session/debug_log.js"
+import { launcherLog } from "../session/debug_log.js"
 import type { ClientMessage, ServerMessage } from "../protocol/types.js"
 
 /**
@@ -40,8 +40,13 @@ import type { ClientMessage, ServerMessage } from "../protocol/types.js"
 const RECONNECT_DELAY_MS = 3_000
 
 /** Caps the launcher daemon advertises: `remote_launch` gates the app's launch
- *  control; `is_daemon` marks the control room so the app filters it. */
-const DAEMON_CAPS = ["remote_launch", "is_daemon"] as const
+ *  control; `is_daemon` marks the control room so the app filters it;
+ *  `session_resume` gates the app's Resume affordance — without it an older
+ *  daemon would silently ignore `sessions_list` (unknown frame) and the app
+ *  would show a misleading "No stored sessions" after a 10s timeout. Version
+ *  gate, not a feature toggle: every daemon that handles `sessions_list` /
+ *  `session_launch {resume}` advertises it. */
+const DAEMON_CAPS = ["remote_launch", "is_daemon", "session_resume"] as const
 
 export interface LauncherHandle {
   readonly roomId: string
@@ -121,7 +126,7 @@ export async function startLauncher(
   ): Promise<void> {
     if (env.ub === undefined) return
     const frame = env.ub as Record<string, unknown>
-    envLog(`launcher ub frame: type=${String(frame.type)} peer=${peer}`)
+    launcherLog(`launcher ub frame: type=${String(frame.type)} peer=${peer}`)
     // This handler runs async-void: an uncaught throw here would kill the
     // whole daemon with no trace. Log EVERYTHING, answer with the daemon's
     // error frame, and stay alive.
@@ -192,7 +197,7 @@ export async function startLauncher(
         all = await (sessionsLister ?? defaultLister)()
       } catch (err) {
         const detail = String(err instanceof Error ? err.message : err).slice(0, 200)
-        envLog(`sessions_list: lister failed: ${detail}`)
+        launcherLog(`sessions_list: lister failed: ${detail}`)
         sender.send({
           type: "error",
           code: "list_failed",
@@ -201,7 +206,7 @@ export async function startLauncher(
         })
         return
       }
-      envLog(`sessions_list: ${all.length} sessions (scope=${String(frame.scope)})`)
+      launcherLog(`sessions_list: ${all.length} sessions (scope=${String(frame.scope)})`)
       const filter =
         typeof frame.filter === "string" && frame.filter.trim().length > 0
           ? frame.filter.trim().toLowerCase()
@@ -243,7 +248,7 @@ export async function startLauncher(
         : process.cwd(),
     )
     if (!effectiveAllowRemoteLaunch(loadLocalConfig(cwd))) {
-      envLog("launcher session_launch: remote launch disabled on this machine")
+      launcherLog("launcher session_launch: remote launch disabled on this machine")
       return
     }
     // Re-check pairing FRESH per launch (design 01M211VW9): the launcher has NO
@@ -259,7 +264,7 @@ export async function startLauncher(
     }
     // Directory allow-list, read FRESH each request.
     if (!launchDirAllowed(cwd, loadConfig().launch?.dirs)) {
-      envLog("launcher session_launch: cwd not in launch.dirs allow-list")
+      launcherLog("launcher session_launch: cwd not in launch.dirs allow-list")
       sender.send({
         type: "error",
         code: "permission_denied",
@@ -274,11 +279,17 @@ export async function startLauncher(
       typeof frame.resume === "string" && frame.resume.trim().length > 0
         ? frame.resume.trim()
         : undefined,
+      // Launch correlation: pi is spawned with UNBIEN_LAUNCH_REQ=<id> and
+      // echoes it in room_meta, so the launching app can match the announcing
+      // room to THIS request and auto-open the chat (resume flow).
+      typeof frame.id === "string" && frame.id.trim().length > 0
+        ? frame.id.trim()
+        : undefined,
     )
-    if (launchError) envLog(`launcher session_launch error: ${launchError}`)
+    if (launchError) launcherLog(`launcher session_launch error: ${launchError}`)
     } catch (err) {
       const detail = String(err instanceof Error ? err.message : err).slice(0, 200)
-      envLog(`launcher ub frame FAILED (${String(frame.type)}): ${detail}`)
+      launcherLog(`launcher ub frame FAILED (${String(frame.type)}): ${detail}`)
       try {
         sender.send({
           type: "error",
@@ -333,7 +344,7 @@ export async function startLauncher(
     // Advertise machine caps up front so the app enables its launch control for
     // this control room. No sessionId — the launcher has no pi session.
     channel.sendEnvelope(helloEnvelope([...DAEMON_CAPS]))
-    envLog(
+    launcherLog(
       `launcher: owner ${peer.slice(0, 8)} (${known.name}) attached; caps sent`,
     )
     // The channel didn't see the line that triggered the attach — route it.
@@ -378,7 +389,7 @@ export async function startLauncher(
   }
 
   async function connectOnce(): Promise<void> {
-    envLog(`connectOnce: dialing ${relayUrl} (room ${roomId})`)
+    launcherLog(`connectOnce: dialing ${relayUrl} (room ${roomId})`)
     const r = new RelayClient(relayUrl, kp)
     relay = r
     // CONNECT TIMEOUT: a hung r.connect (observed once under launchd — the
@@ -430,9 +441,9 @@ export async function startLauncher(
       const { blob, sig } = buildSignedAllowList(kp, owners, version)
       r.sendControl({ type: "pairing_set", blob, sig })
     } catch (err) {
-      envLog(`launcher pairing_set push failed: ${String(err)}`)
+      launcherLog(`launcher pairing_set push failed: ${String(err)}`)
     }
-    envLog(
+    launcherLog(
       `launcher: connected to control room ${roomId} (epk ${epk.slice(0, 12)}…)`,
     )
   }
@@ -445,7 +456,7 @@ export async function startLauncher(
   try {
     await connectOnce()
   } catch (err) {
-    envLog(
+    launcherLog(
       `launcher: initial connect failed (${err instanceof Error ? err.message : String(err)}) — retrying every ${RECONNECT_DELAY_MS}ms`,
     )
     scheduleReconnect()

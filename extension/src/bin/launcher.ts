@@ -15,7 +15,7 @@ import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { dirname, join } from "node:path"
 import { startLauncher } from "../launcher/launcher.js"
-import { envLog } from "../session/debug_log.js"
+import { launcherLog } from "../session/debug_log.js"
 
 /** Package version for --version reporting (the deploy-stale-binary trap
  *  makes "which build is running" the first diagnostic question). */
@@ -45,6 +45,9 @@ async function main(): Promise<void> {
     `[un-bien launcher] listening on control room ${handle.roomId} ` +
       `(epk ${handle.epk.slice(0, 16)}…) — Ctrl-C to stop`,
   )
+  launcherLog(
+    `listening on control room ${handle.roomId} (epk ${handle.epk.slice(0, 16)}…)`,
+  )
 
   let shuttingDown = false
   const shutdown = (signal: string) => {
@@ -52,6 +55,7 @@ async function main(): Promise<void> {
     shuttingDown = true
     // eslint-disable-next-line no-console
     console.log(`[un-bien launcher] ${signal} — shutting down`)
+    launcherLog(`${signal} — shutting down`)
     handle.stop()
     process.exit(0)
   }
@@ -60,7 +64,7 @@ async function main(): Promise<void> {
     // Attribution: something restarts this daemon every ~minute — the pid +
     // uptime make the victim (and the killer's cadence) identifiable from
     // the log alone.
-    envLog(
+    launcherLog(
       `SIGTERM received (pid ${process.pid}, uptime ${Math.round(process.uptime())}s) — shutting down`,
     )
     shutdown("SIGTERM")
@@ -68,9 +72,9 @@ async function main(): Promise<void> {
 }
 
 main().catch((err: unknown) => {
+  const detail = err instanceof Error ? err.message : String(err)
   // eslint-disable-next-line no-console
-  console.error(
-    `[un-bien launcher] fatal: ${err instanceof Error ? err.message : String(err)}`,
-  )
+  console.error(`[un-bien launcher] fatal: ${detail}`)
+  launcherLog(`fatal: ${detail}`)
   process.exit(1)
 })

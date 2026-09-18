@@ -17,7 +17,24 @@ export type UnBienConfig = {
    * a persisted config field is the only reliable enable switch. Absent/false by
    * default: no logging.
    */
-  debug?: { envelope?: boolean; panels?: boolean }
+  debug?: {
+    envelope?: boolean
+    panels?: boolean
+    /** Launcher daemon operational log (`<state>/launcher.log`): per-frame
+     *  chatter, session_launch gates, connect lifecycle. Default false —
+     *  with the pref off, only the service unit's stdout redirect (startup /
+     *  shutdown / fatal, undated) reaches the file. Separate from
+     *  `envelope` so enabling the launcher log doesn't drag in extension
+     *  envelope debugging. Read once at first log line; restart the daemon
+     *  to pick up a flip. */
+    launcher?: boolean
+    /** Relay log level (`relay.log`): when true (and RUST_LOG is unset),
+     *  the relay upgrades its tracing filter from the default ERROR-only to
+     *  INFO — mesh storage, listens, peer/room lifecycle. Read by the relay
+     *  process itself from this same config file at startup; restart the
+     *  relay to pick up a flip. */
+    relay?: boolean
+  }
   /**
    * Machine-wide fallback defaults for a session's LOCAL config (the per-cwd
    * `.pi/un-bien/config.json`). A field here applies to every cwd that does

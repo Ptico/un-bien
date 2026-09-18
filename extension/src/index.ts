@@ -1287,6 +1287,15 @@ function _routeUnBienPlaneFrom(
       backend,
       cwd,
       typeof f.name === "string" ? f.name : undefined,
+      // Launch correlation: pi is spawned with UNBIEN_LAUNCH_REQ=<id> and
+      // echoes it in room_meta, so the launching app can match the announcing
+      // room to THIS request and auto-open the chat (resume flow).
+      typeof f.resume === "string" && f.resume.trim().length > 0
+        ? f.resume.trim()
+        : undefined,
+      typeof f.id === "string" && f.id.trim().length > 0
+        ? f.id.trim()
+        : undefined,
     )
     if (launchError) envLog(`session_launch(ub) error: ${launchError}`)
     return

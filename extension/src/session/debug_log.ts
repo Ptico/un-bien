@@ -40,3 +40,40 @@ export function envLog(msg: string): void {
     /* best-effort */
   }
 }
+
+// Resolved lazily on first use, same reasoning as logFilePath above.
+let launcherLogPath: string | undefined
+function launcherLogFilePath(): string {
+  if (launcherLogPath === undefined) {
+    launcherLogPath = join(unbienStateHome(), "launcher.log")
+  }
+  return launcherLogPath
+}
+
+// Resolved once: the launcher pref is the same kind of dev switch as the
+// envelope one — not something that flips mid-process — so we read the config
+// file a single time on first use. Restart the daemon to pick up a flip.
+let launcherEnabled: boolean | undefined
+function launcherIsEnabled(): boolean {
+  if (launcherEnabled === undefined) {
+    launcherEnabled = loadConfig().debug?.launcher === true
+  }
+  return launcherEnabled
+}
+
+/** Append a DATESTAMPED line to `<state>/launcher.log` — the launcher
+ *  daemon's operational log. Gated on the `debug.launcher` config pref
+ *  (SEPARATE from `debug.envelope` — enabling one must not drag in the
+ *  other). With the pref off, only the service unit's stdout redirect
+ *  (startup / shutdown / fatal) reaches the file. Best-effort, never
+ *  throws. */
+export function launcherLog(msg: string): void {
+  if (!launcherIsEnabled()) return
+  try {
+    const path = launcherLogFilePath()
+    mkdirSync(dirname(path), { recursive: true })
+    appendFileSync(path, `${new Date().toISOString()} ${msg}\n`)
+  } catch {
+    /* best-effort */
+  }
+}

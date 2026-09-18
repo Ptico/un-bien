@@ -53,6 +53,10 @@ export function _buildTmuxLaunchArgs(
   sessionExists: boolean,
   sessionName?: string | undefined,
   resume?: string | undefined,
+  /** Pane command override — defaults to bare `pi`. `launchReq` correlation
+   *  passes `env UNBIEN_LAUNCH_REQ=<id> pi` so the spawned extension can echo
+   *  the request id (launch auto-open). */
+  commandArgv: string[] = ["pi"],
 ): string[] {
   const nameArgv =
     typeof sessionName === "string" && sessionName.trim().length > 0
@@ -73,7 +77,7 @@ export function _buildTmuxLaunchArgs(
         windowName,
         "-c",
         cwd,
-        "pi",
+        ...commandArgv,
         ...nameArgv,
         ...resumeArgv,
       ]
@@ -86,7 +90,7 @@ export function _buildTmuxLaunchArgs(
         windowName,
         "-c",
         cwd,
-        "pi",
+        ...commandArgv,
         ...nameArgv,
         ...resumeArgv,
       ]
@@ -155,9 +159,13 @@ function _backendAvailable(backend: "tmux" | "herdr"): boolean {
   }
 }
 
-function _execFileCapture(cmd: string, args: string[]): Promise<string> {
+function _execFileCapture(
+  cmd: string,
+  args: string[],
+  opts: { env?: NodeJS.ProcessEnv } = {},
+): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile(cmd, args, { timeout: 15_000 }, (err, stdout) => {
+    execFile(cmd, args, { timeout: 15_000, env: opts.env }, (err, stdout) => {
       if (err) reject(err)
       else resolve(stdout)
     })
@@ -170,21 +178,29 @@ function _execFileCapture(cmd: string, args: string[]): Promise<string> {
  * (`agent start --kind pi`). Fire-and-forget — the launched pi joins the relay
  * and the app attaches there; create/start errors are logged, not returned.
  */
-async function _launchHerdr(cwd: string, agentName: string): Promise<void> {
+async function _launchHerdr(
+  cwd: string,
+  agentName: string,
+  launchReq?: string,
+): Promise<void> {
+  // launchReq rides the spawn env: herdr's `agent start --kind pi` spawns pi
+  // as a child, which inherits this env, so the extension's roomMeta can echo
+  // it (launch correlation — the app auto-opens the launched chat).
+  const spawnEnv = launchReq
+    ? { env: { ...process.env, UNBIEN_LAUNCH_REQ: launchReq } }
+    : {}
   try {
     const created = await _execFileCapture(
       "herdr",
       _buildHerdrWorkspaceArgs(agentName, cwd),
+      spawnEnv,
     )
     const paneId = _herdrPaneIdFromCreate(created)
     if (!paneId) {
       envLog("herdr launch: no root_pane_id in `workspace create` output")
       return
     }
-    await _execFileCapture(
-      "herdr",
-      _buildHerdrAgentStartArgs(agentName, paneId),
-    )
+    await _execFileCapture("herdr", _buildHerdrAgentStartArgs(agentName, paneId), spawnEnv)
     envLog(`herdr launch: agent '${agentName}' started in pane ${paneId}`)
   } catch (error) {
     envLog(
@@ -223,6 +239,7 @@ export function _launchSession(
   cwd: string,
   name: string | undefined,
   resume?: string | undefined,
+  launchReq?: string | undefined,
 ): string | null {
   if (mode === "rpc") return "launch mode 'rpc' is not supported yet"
   if (mode !== "tmux" && mode !== "herdr") {
@@ -240,7 +257,7 @@ export function _launchSession(
   }
   if (mode === "herdr") {
     const agentName = _safeHerdrName(name, `pi-${basename(cwd) || "session"}`)
-    void _launchHerdr(cwd, agentName)
+    void _launchHerdr(cwd, agentName, launchReq)
     return null
   }
   // One shared, named tmux session; each launch is a WINDOW in it (single
@@ -256,9 +273,25 @@ export function _launchSession(
       timeout: 5_000,
     }).status === 0
   try {
+    // launchReq rides INTO the pane command via `env` (tmux-version-proof —
+    // no reliance on `new-window -e`): the spawned pi's extension reads it at
+    // startup and echoes it in room_meta, so the launching app can match the
+    // announcing room to its request and auto-open the chat (launch
+    // correlation — resume flow). Undefined → plain `pi` command.
+    const commandArgv = launchReq
+      ? ["env", `UNBIEN_LAUNCH_REQ=${launchReq}`, "pi"]
+      : ["pi"]
     const child = spawn(
       "tmux",
-      _buildTmuxLaunchArgs(session, windowName, cwd, sessionExists, name, resume),
+      _buildTmuxLaunchArgs(
+        session,
+        windowName,
+        cwd,
+        sessionExists,
+        name,
+        resume,
+        commandArgv,
+      ),
       { detached: true, stdio: "ignore" },
     )
     child.unref()

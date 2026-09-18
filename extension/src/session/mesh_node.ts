@@ -418,7 +418,14 @@ export class MeshNode {
       try {
         await candidateRelay.connect({
           roomId,
-          roomMeta: { name: roomName, cwd: paramsAtStart.cwd! },
+          roomMeta: {
+            name: roomName,
+            cwd: paramsAtStart.cwd!,
+            // Launch-correlation echo (resume flow) — see lifecycle.ts.
+            ...(process.env.UNBIEN_LAUNCH_REQ
+              ? { launchReq: process.env.UNBIEN_LAUNCH_REQ }
+              : {}),
+          },
         })
       } catch (error) {
         this._closeOwnedRelay(candidateRelay)

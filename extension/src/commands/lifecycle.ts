@@ -414,7 +414,14 @@ export async function _cmdStart(
     thinking?: ThinkingLevel
     sessionId?: string
     caps?: string[]
+    launchReq?: string
   } = { name: sessionName, cwd }
+  // Launch-correlation echo (resume flow): a REMOTELY launched session was
+  // spawned with UNBIEN_LAUNCH_REQ=<request id>. Echoing it in room_meta —
+  // which the relay flattens verbatim into room_announced — lets the
+  // launching app match the announce to its request and auto-open the chat.
+  const launchReq = process.env.UNBIEN_LAUNCH_REQ
+  if (launchReq) roomMeta.launchReq = launchReq
   // Advertise session caps on the room announce (design 01M1SJDZ) so the app
   // learns remote_terminate etc. on DISCOVERY — the ub hello only reaches it
   // after attach, so Home's End Chat gating was blind until you opened the

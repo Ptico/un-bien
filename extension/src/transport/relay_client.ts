@@ -64,6 +64,13 @@ export interface RoomMeta {
   /** Caps the room advertises about itself; the launcher daemon stamps
    *  `is_daemon` so the app filters its control room. */
   caps?: string[]
+  /** Launch-correlation echo (resume flow): when pi was spawned REMOTELY
+   *  (`session_launch`), the launcher daemon passed `UNBIEN_LAUNCH_REQ=<id>`
+   *  and the extension echoes it here. The relay flattens room_meta verbatim
+   *  into `room_announced`, so the launching app can deterministically match
+   *  the announcing room to its request and auto-open the chat. Absent for
+   *  locally-started sessions. */
+  launchReq?: string
 }
 
 /** Control frame sent to relay (not routed to app peer). Each publish carries
