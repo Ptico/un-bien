@@ -618,7 +618,13 @@ describe("received-image previews", () => {
     expect(preview?.details?.previewPath).toBeUndefined()
   })
 
-  test("active image steering defers local preview until agent_end", async () => {
+  // 15s (was the 5s default): this test does real setImmediate/event-loop
+  // turns and TIMED OUT on a loaded CI runner, failing the npm-publish run
+  // for v0.20.5. Timing-sensitive, not load-bearing — give it headroom.
+  test(
+    "active image steering defers local preview until agent_end",
+    { timeout: 15000 },
+    async () => {
     await _pairForTest("ownerA__1234567890")
     const onInput = captureEventHandler("input")
     const onAgentEnd = captureEventHandler("agent_end")
@@ -662,9 +668,15 @@ describe("received-image previews", () => {
     expect((sentMessages[0][0] as { customType?: unknown }).customType).toBe(
       "un-bien:received-image",
     )
-  })
+    },
+  )
 
-  test("slow idle JPEG conversion defers preview if another turn starts first", async () => {
+  // Same 15s headroom as its sibling above — identical timing-sensitive
+  // pattern (real event-loop turns; flaked once on CI at the 5s default).
+  test(
+    "slow idle JPEG conversion defers preview if another turn starts first",
+    { timeout: 15000 },
+    async () => {
     let resolveConversion:
       ((value: { data: string; mimeType: string }) => void) | undefined
     _convertToPngMock.mockReturnValueOnce(
@@ -717,7 +729,8 @@ describe("received-image previews", () => {
     expect((sentMessages[0][0] as { customType?: unknown }).customType).toBe(
       "un-bien:received-image",
     )
-  })
+    },
+  )
 
   test("received-image preview messages are filtered out of provider and compaction context", () => {
     const previewMessage = {
