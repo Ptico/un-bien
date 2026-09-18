@@ -57,14 +57,14 @@ import { fileURLToPath } from "node:url"
  * binary from PATH (they did `npm install -g un-bien`), so re-linking would
  * point their `un-bien` at the Pi-extension copy and diverge on upgrades.
  */
-/** Returns true on success, false when install failed (so the standalone CLI
- *  can exit non-zero — e.g. the Cockpit / CI detect failure by exit code).
- *  We do NOT process.exit here: this also runs inside the Pi TUI, where exiting
- *  would kill the session. */
-export function _cmdInstall(
-  ctx: Pick<ExtensionContext, "ui">,
+/** Launcher-daemon install WITHOUT notifying — returns the report sections.
+ *  _cmdInstallTarget consolidates these into ONE final notify: the pi TUI
+ *  replaces toasts as they arrive, so per-step messages were wiping each
+ *  other out — only the last toast stayed visible (the "all" run looked like
+ *  it only installed the relay). */
+export function installLauncherSections(
   opts: { linkCli?: boolean } = {},
-): boolean {
+): { ok: boolean; sections: string[] } {
   const linkCli = opts.linkCli ?? false
   try {
     const result = installService()
@@ -95,18 +95,31 @@ export function _cmdInstall(
         }
       }
     }
-    ctx.ui.notify(sections.join("\n"), "info")
-    return true
+    return { ok: true, sections }
   } catch (err) {
-    ctx.ui.notify(`[un-bien] install failed: ${String(err)}`, "error")
-    return false
+    return {
+      ok: false,
+      sections: [`[un-bien] launcher install failed: ${String(err)}`],
+    }
   }
 }
 
-export function _cmdUninstall(
+/** Standalone launcher install: runs the sections builder and reports it.
+ *  The multi-component `/unbien install` path goes through _cmdInstallTarget
+ *  (which consolidates into one final notify). */
+export function _cmdInstall(
   ctx: Pick<ExtensionContext, "ui">,
   opts: { linkCli?: boolean } = {},
-): void {
+): boolean {
+  const { ok, sections } = installLauncherSections(opts)
+  ctx.ui.notify(sections.join("\n"), ok ? "info" : "error")
+  return ok
+}
+
+/** Launcher-daemon uninstall WITHOUT notifying — see installLauncherSections. */
+export function uninstallLauncherSections(opts: {
+  linkCli?: boolean
+} = {}): { sections: string[] } {
   const linkCli = opts.linkCli ?? false
   try {
     const result = uninstallService()
@@ -126,10 +139,19 @@ export function _cmdUninstall(
           .join("\n"),
       )
     }
-    ctx.ui.notify(sections.join("\n"), "info")
+    return { sections }
   } catch (err) {
-    ctx.ui.notify(`[un-bien] uninstall failed: ${String(err)}`, "error")
+    return { sections: [`[un-bien] launcher uninstall failed: ${String(err)}`] }
   }
+}
+
+/** Standalone launcher uninstall — see _cmdInstall. */
+export function _cmdUninstall(
+  ctx: Pick<ExtensionContext, "ui">,
+  opts: { linkCli?: boolean } = {},
+): void {
+  const { sections } = uninstallLauncherSections(opts)
+  ctx.ui.notify(sections.join("\n"), "info")
 }
 
 // ── Component install dispatch (relay / launcher / cli / all) ──────────────
@@ -146,24 +168,29 @@ export function parseInstallTarget(raw: string): InstallTarget | null {
 }
 
 /** Install one or all un-bien components. Async: relay/cli installs spawn
- *  package managers (cargo/npm) that take minutes. Reports each component's
- *  outcome; returns true only if every attempted component succeeded.
+ *  package managers (cargo/npm) that take minutes. Returns true only if every
+ *  attempted component succeeded.
  *
  *  Ordering for `all` is launcher → cli → relay: the launcher is a fast,
- *  purely-local supervisor render + activation (systemd/launchd) that prints
- *  its confirmation immediately — matching what the user sees on a working
- *  mac install. The relay goes LAST because on a fresh Linux box it may
- *  compile via cargo for minutes; doing it first made the whole command look
- *  dead ("installing…" then silence) while the systemd units never appeared.
+ *  purely-local supervisor render + activation (systemd/launchd); the relay
+ *  goes LAST because on a fresh Linux box it may compile via cargo for
+ *  minutes.
  *
- *  Every step streams to ctx.ui.notify as it happens — nothing is buffered
- *  until the end (the CLI path already printed live; the TUI path must too). */
+ *  REPORTING: the pi TUI replaces notify toasts as they arrive — per-step
+ *  messages wipe each other out, so an "all" run looked like it only
+ *  installed the relay. Intermediate "installing X…" toasts are kept as
+ *  transient alive-signals, but the DURABLE report is the ONE consolidated
+ *  notify at the end (all sections joined, error level if anything failed).
+ *  Raw package-manager output (cargo/npm lines) streams as transient toasts
+ *  and is NOT copied into the summary — the component result lines carry the
+ *  verdict. */
 export async function _cmdInstallTarget(
   ctx: Pick<ExtensionContext, "ui">,
   target: InstallTarget,
   opts: { linkCli?: boolean } = {},
 ): Promise<boolean> {
   const linkCli = opts.linkCli ?? false
+  const summary: string[] = []
   let ok = true
 
   const want =
@@ -173,6 +200,7 @@ export async function _cmdInstallTarget(
 
   for (const component of want) {
     if (component === "launcher") {
+      ctx.ui.notify("[un-bien] installing launcher daemon…", "info")
       // Headless-service identity: the daemon cannot interact with keychain
       // UI (a launchd context hang was observed) — pin the keypair to the
       // file backend before the service starts. Key UNCHANGED.
@@ -181,60 +209,53 @@ export async function _cmdInstallTarget(
         const { saveConfig } = await import("../config.js")
         const { path, wrote } = await provisionFileIdentity()
         saveConfig({ identity: { storage: "file" } })
-        if (wrote) ctx.ui.notify(`[un-bien] identity pinned to ${path} (file storage)`, "info")
+        if (wrote)
+          summary.push(`[un-bien] identity pinned to ${path} (file storage)`)
       } catch (err) {
-        ctx.ui.notify(`[un-bien] identity provisioning failed: ${String(err)}`, "error")
+        ok = false
+        summary.push(`[un-bien] identity provisioning failed: ${String(err)}`)
       }
-      // Reuses the sync path: the launcher unit render + bootstrap is local
-      // and fast (no package manager involved).
-      const done = _cmdInstall(ctx, { linkCli })
-      ok = ok && done
+      const launcher = installLauncherSections({ linkCli })
+      ok = ok && launcher.ok
+      summary.push(...launcher.sections)
       continue
     }
+    ctx.ui.notify(`[un-bien] installing ${component}…`, "info")
     try {
       if (component === "relay") {
-        ctx.ui.notify("[un-bien] installing relay service…", "info")
         const r = await installRelayService({
           autoInstall: true,
-          // Stream live — a cargo compile takes minutes and the user must
-          // see progress, not silence (this was the "prints nothing" bug).
-          onLog: (l) => ctx.ui.notify(`[un-bien relay] ${l}`, "info"),
+          // transient progress toasts (replaced as they arrive)
+          onLog: (l) => ctx.ui.notify(`[relay] ${l}`, "info"),
         })
-        ctx.ui.notify(
-          [
-            `[un-bien] Relay service installed (${r.platform}).`,
-            `  Unit: ${r.unitPath}`,
-            `  Binary: ${r.binary}`,
-            `  Port: ${r.port} (ws://<host>:${r.port})`,
-          ].join("\n"),
-          "info",
+        summary.push(
+          `[un-bien] Relay service installed (${r.platform}).`,
+          `  Unit: ${r.unitPath}`,
+          `  Binary: ${r.binary}`,
+          `  Port: ${r.port} (ws://<host>:${r.port})`,
         )
       } else if (component === "cli") {
-        ctx.ui.notify(
-          "[un-bien] installing the unbien CLI (npm install -g)…",
-          "info",
-        )
         const r = await installCliPackage((l) =>
-          ctx.ui.notify(`[un-bien cli] ${l}`, "info"),
+          ctx.ui.notify(`[cli] ${l}`, "info"),
         )
-        ctx.ui.notify(
+        summary.push(
           `[un-bien] CLI installed${r.version ? ` (unbien ${r.version})` : ""}.`,
-          "info",
         )
       }
     } catch (err) {
       ok = false
-      ctx.ui.notify(
-        `[un-bien] ${component} install failed: ${String(err)}`,
-        "error",
-      )
+      summary.push(`[un-bien] ${component} install failed: ${String(err)}`)
     }
   }
 
+  // The DURABLE report — last toast standing, nothing after it to wipe it.
+  ctx.ui.notify(summary.join("\n"), ok ? "info" : "error")
   return ok
 }
 
-/** Uninstall counterpart: relay service + launcher service + CLI shims. */
+/** Uninstall counterpart: relay service + launcher service + CLI shims.
+ *  Same consolidated-report rule as _cmdInstallTarget: one final notify
+ *  carries everything (TUI toasts replace each other). */
 export async function _cmdUninstallTarget(
   ctx: Pick<ExtensionContext, "ui">,
   target: InstallTarget,
@@ -249,22 +270,32 @@ export async function _cmdUninstallTarget(
   // uninstalls pass linkCli: false down.
   const componentOpts =
     target === "all" ? opts : { ...opts, linkCli: false }
-  if (want.includes("launcher")) _cmdUninstall(ctx, componentOpts)
+
+  const summary: string[] = []
+  let ok = true
+
+  if (want.includes("launcher")) {
+    ctx.ui.notify("[un-bien] uninstalling launcher daemon…", "info")
+    const launcher = uninstallLauncherSections(componentOpts)
+    summary.push(...launcher.sections)
+    if (launcher.sections.some((s) => s.includes("uninstall failed"))) ok = false
+  }
   if (want.includes("relay")) {
+    ctx.ui.notify("[un-bien] uninstalling relay service…", "info")
     try {
       const r = await uninstallRelayService()
-      ctx.ui.notify(
-        [
-          `[un-bien] Relay service uninstalled (${r.removed ? "removed" : "not present"}).`,
-          `  Unit: ${r.unitPath}`,
-          `  Steps:\n${r.log.map((l) => "    " + l).join("\n")}`,
-        ].join("\n"),
-        "info",
+      summary.push(
+        `[un-bien] Relay service uninstalled (${r.removed ? "removed" : "not present"}).`,
+        `  Unit: ${r.unitPath}`,
+        `  Steps:\n${r.log.map((l) => "    " + l).join("\n")}`,
       )
     } catch (err) {
-      ctx.ui.notify(`[un-bien] relay uninstall failed: ${String(err)}`, "error")
+      ok = false
+      summary.push(`[un-bien] relay uninstall failed: ${String(err)}`)
     }
   }
+
+  ctx.ui.notify(summary.join("\n"), ok ? "info" : "error")
 }
 
 // ── Agent-network commands (plano 19) ─────────────────────────────────────────

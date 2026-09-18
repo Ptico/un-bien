@@ -303,7 +303,16 @@ export async function installRelayService(opts: {
       })
       await execFileAsync(
         "systemctl",
-        ["--user", "enable", "--now", RELAY_SYSTEMD_UNIT],
+        ["--user", "enable", RELAY_SYSTEMD_UNIT],
+        { timeout: 30_000 },
+      )
+      // restart (NOT enable --now): bounce an already-running relay so the
+      // fresh unit + binary take effect — parity with the macOS
+      // bootout+bootstrap path above. restart also starts an inactive unit,
+      // so fresh installs behave identically.
+      await execFileAsync(
+        "systemctl",
+        ["--user", "restart", RELAY_SYSTEMD_UNIT],
         { timeout: 30_000 },
       )
     } catch (err) {
@@ -311,10 +320,10 @@ export async function installRelayService(opts: {
         `systemctl --user failed — is a user systemd session available on this ` +
           `machine? (SSH/headless: run 'loginctl enable-linger ${userInfo().username}'; ` +
           `WSL: enable systemd in /etc/wsl.conf). Start manually with: ` +
-          `systemctl --user enable --now ${RELAY_SYSTEMD_UNIT}. (${String(err)})`,
+          `systemctl --user restart ${RELAY_SYSTEMD_UNIT}. (${String(err)})`,
       )
     }
-    push("activated via systemctl --user enable --now")
+    push("activated via systemctl --user enable + restart")
   }
 
   return { platform, unitPath, binary: binary.path, port, log }

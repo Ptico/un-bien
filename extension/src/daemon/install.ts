@@ -377,17 +377,21 @@ export function installService(
     // is already written at this point, so the remedy is one command + retry.
     try {
       _exec("systemctl", ["--user", "daemon-reload"], log)
-      _exec("systemctl", ["--user", "enable", "--now", SYSTEMD_UNIT], log)
+      _exec("systemctl", ["--user", "enable", SYSTEMD_UNIT], log)
+      // restart (NOT enable --now): bounce an already-running launcher so the
+      // fresh unit + code take effect — parity with the launchd bootout +
+      // bootstrap path above. restart also starts an inactive unit.
+      _exec("systemctl", ["--user", "restart", SYSTEMD_UNIT], log)
     } catch (err) {
       throw new Error(
         `${String(err)}\n` +
           `hint: over SSH (or before first login) there is no user systemd session. ` +
           `Run 'loginctl enable-linger ${userInfo().username}' once, then re-run install; ` +
           `the unit is already written at ${unitPath} and can also be started manually ` +
-          `with 'systemctl --user enable --now ${SYSTEMD_UNIT}'.`,
+          `with 'systemctl --user restart ${SYSTEMD_UNIT}'.`,
       )
     }
-    log.push("activated via systemctl --user enable --now")
+    log.push("activated via systemctl --user enable + restart")
   } else {
     // windows — Task Scheduler. The action runs `wscript.exe
     // <launcher.vbs>` (not node directly) so the launcher daemon starts hidden,
