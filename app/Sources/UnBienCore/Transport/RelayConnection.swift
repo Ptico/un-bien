@@ -101,7 +101,10 @@ public actor RelayConnection {
         }
     }
 
-    private enum WirePlane { case rpc, ub }
+    /// Internal (not private) so the plane-mapping test can assert every
+    /// ClientMessage routes to its intended plane — see
+    /// RelayConnectionTests.testClientMessagePlaneMapping.
+    enum WirePlane: Equatable { case rpc, ub }
 
     /// Map a stock-encoded ``ClientMessage`` frame to its pi first-class rpc verb
     /// (rpc plane) or un-bien-owned frame (ub plane), per the command taxonomy.
@@ -114,7 +117,7 @@ public actor RelayConnection {
     /// extension_ui_response (+ ping/approve_tool) pass through unchanged on the
     /// rpc plane THIS wave; session_sync/session_launch move to the un plane with
     /// the fork's un-dispatcher (a later wave).
-    private static func mapToWire(_ frame: JSONValue) -> (WirePlane, JSONValue) {
+    static func mapToWire(_ frame: JSONValue) -> (WirePlane, JSONValue) {
         guard var obj = frame.objectValue, let type = obj["type"]?.stringValue else {
             return (.rpc, frame)
         }
@@ -148,10 +151,14 @@ public actor RelayConnection {
             obj["type"] = .string("new_session")
             return (.rpc, .object(obj))
         case "session_sync", "session_launch", "presence_status", "get_session_info",
-             "terminate", "close_child_room", "session_fork", "session_navigate":
+             "terminate", "close_child_room", "session_fork", "session_navigate",
+             "sessions_list":
             // un-bien's OWN protocol (reconstruction request / mesh remote-launch
-            // / daemon caps pull) — the extension/daemon acts. The frame keeps its
-            // inner type verbatim.
+            // / daemon caps pull / stored-session listing for the resume flow) —
+            // the extension/daemon acts. The frame keeps its inner type verbatim.
+            // sessions_list MUST ride the ub plane: the daemon's dispatcher reads
+            // env.ub only, so an rpc-plane misroute is a SILENT drop (the daemon
+            // never answers, and the app's request times out).
             return (.ub, frame)
         default:
             // extension_ui_response (matches pi's SDK ui contract) / ping /

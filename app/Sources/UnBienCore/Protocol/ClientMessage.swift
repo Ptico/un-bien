@@ -33,8 +33,20 @@ public enum ClientMessage: Equatable, Sendable {
     /// (owner-key + config gated; shown only when the `remote_launch` cap is
     /// advertised). `mode` is optional and normally omitted — the machine's
     /// `launch.backend` config decides the backend (tmux | herdr; rpc is a
-    /// fast-follow).
-    case sessionLaunch(id: String, mode: String?, cwd: String?, name: String?)
+    /// fast-follow). `resume` names a STORED pi session file (from
+    /// `sessions_list`) to relaunch instead of starting fresh — pi reopens
+    /// it in the machine's backend and REUSES the session's id, so the
+    /// resumed room announces with the SAME sessionId and is matchable
+    /// deterministically (no "which room is it" race).
+    case sessionLaunch(id: String, mode: String?, cwd: String?, name: String?,
+                       resume: String?)
+    /// un-bien stored-session PULL (resume flow): ask a machine's presence
+    /// daemon to list stored pi sessions (pi's public SessionManager).
+    /// Answered ONLY by the presence daemon with a `sessions_list_result`
+    /// { in_reply_to, sessions } ub frame — global (`scope: "all"`) or
+    /// per-directory (`cwd`) scope, substring-filtered, recency-sorted
+    /// daemon-side.
+    case sessionsList(id: String, scope: String, cwd: String?, filter: String?)
     /// Daemon caps PULL (design 01M1813Q): ask a machine's presence daemon for
     /// its capabilities. Answered ONLY by the presence daemon with a
     /// `presence_status` response { caps, hostname, backend }.
@@ -102,6 +114,7 @@ public enum ClientMessage: Equatable, Sendable {
         case .thinkingSet: return "thinking_set"
         case .listModels: return "list_models"
         case .sessionLaunch: return "session_launch"
+        case .sessionsList: return "sessions_list"
         case .presenceStatus: return "presence_status"
         case .getSessionInfo: return "get_session_info"
         case .terminate: return "terminate"

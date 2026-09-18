@@ -91,6 +91,14 @@ public struct RoomInfo: Codable, Equatable, Sendable {
     /// Caps the room advertises via room_meta; the presence daemon stamps
     /// `is_daemon` so its control room is filtered from the session list.
     public let caps: [String]?
+    /// Launch-correlation echo (launch auto-open): the launcher daemon spawns
+    /// pi with `UNBIEN_LAUNCH_REQ = <request id>` and the extension echoes it
+    /// in its room_meta. Lets the app deterministically match a
+    /// `session_launch`/resume request to the room it created (same mechanism
+    /// as the fork flow's `forked_from_req` echo). Absent on older
+    /// daemons/extensions — the session then just surfaces via normal
+    /// discovery.
+    public let launchReq: String?
 
     enum CodingKeys: String, CodingKey {
         case roomID = "room_id"
@@ -100,6 +108,7 @@ public struct RoomInfo: Codable, Equatable, Sendable {
         case subagentID = "subagentId"
         case sessionID = "sessionId"
         case parentSessionID = "parentSessionId"
+        case launchReq = "launchReq"
     }
 }
 

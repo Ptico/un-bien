@@ -333,6 +333,26 @@ extension AppModel {
                 backend: ub["backend"]?.stringValue)
             return
         }
+        // Reply half of `listMachineSessions` (resume flow): correlate the
+        // daemon's `sessions_list_result` by in_reply_to — same request/reply
+        // parking as pendingRpcReplies. A daemon `error` frame (below) carries
+        // no in_reply_to, so it fails the waits for THAT machine by peer.
+        if ub["type"]?.stringValue == "sessions_list_result",
+           let reqID = ub["in_reply_to"]?.stringValue,
+           let parked = pendingSessionLists.removeValue(forKey: reqID) {
+            parked.continuation.resume(returning: ub)
+            return
+        }
+        if ub["type"]?.stringValue == "error", !pendingSessionLists.isEmpty {
+            // Daemon refusals (unknown_peer / permission_denied / list_failed)
+            // carry no in_reply_to — fail every parked list for this peer so
+            // the caller sees the refusal, not a silent "no sessions".
+            for (rid, parked) in pendingSessionLists where parked.peer == peer {
+                pendingSessionLists.removeValue(forKey: rid)
+                parked.continuation.resume(returning: ub)
+            }
+            return
+        }
         // Response to a `get_session_info` PULL: a subagent reporting its
         // own lifecycle status over its connection (design 01M18PCM). Set
         // it on the child LiveSession, keyed by the child's pi sessionId,
@@ -914,66 +934,6 @@ extension AppModel {
         }
     }
 
-    private func upsertSession(relayID: UUID, peer: String, room: RoomInfo) {
-        // The presence daemon's control room is not a chat session: it carries the
-        // `is_daemon` cap, its roomId is the control-room derivation, and it has no
-        // pi sessionId (a real session's wire identity).
-        if room.caps?.contains("is_daemon") == true { return }
-        if let control = Base64.deriveControlRoom(epk: peer), room.roomID == control { return }
-        guard let sessionID = room.sessionID else { return }
-        var session = LiveSession(relayID: relayID, peerEPK: peer, roomID: room.roomID,
-                                  sessionID: sessionID,
-                                  name: room.name, cwd: room.cwd, model: nil,
-                                  parentSessionID: room.parentSessionID,
-                                  parentRoomID: room.parent, subagentID: room.subagentID)
-        // Manual dismissal (plan 01M18X3B): an ended chat the user removed
-        // stays hidden — a snapshot re-listing or re-announce is the room
-        // LINGERING at the relay, not liveness. Only proof of life (a fresh
-        // `ub hello`) or a genuine roomEnded clears the pin.
-        if dismissedSessions[session.id] != nil { return }
-        // Carry a known status across re-announce (reconnect/relaunch replays
-        // room_announced); the pull below refreshes it.
-        let isNewRoom = sessions[session.id] == nil
-        session.status = sessions[session.id]?.status
-        sessions[session.id] = session
-        // Seed caps from the room announce (design 01M1SJDZ): the ub hello only
-        // arrives on ATTACH, so pre-attach (Home) this is how End Chat learns
-        // remote_terminate for a session you haven't opened. Seed-if-absent
-        // only — the hello stays authoritative once attached. (is_daemon /
-        // control rooms already returned above, so room.caps here is a session
-        // cap set.)
-        if capabilities[session.id] == nil, let caps = room.caps, !caps.isEmpty {
-            capabilities[session.id] = Set(caps)
-        }
-        // FORK AUTO-NAV pull: a fork/clone is pending and a NEW room just
-        // appeared — it may be the fork-born session. session_sync normally
-        // fires only on openSession (view appear), which won't happen until the
-        // user opens it, so proactively sync here to pull `forked_from_req` and
-        // trigger the pop-to-root navigation without the user tapping in.
-        if isNewRoom, !pendingForkReqs.isEmpty, let connection = connections[relayID] {
-            let peerEPK = session.peerEPK
-            let roomID = session.roomID
-            Task { try? await connection.send(.sessionSync(id: UUID().uuidString, limit: nil),
-                                              toPeer: peerEPK, room: roomID) }
-        }
-        // A re-advertised room means the session is live again — the resume
-        // flow: the OUTGOING extension instance broadcast session_shutdown
-        // (banner up), then the fresh instance re-joined the SAME room under
-        // the durable session id. Covers room_announced pushes AND rooms_check
-        // recovery on (re)connect. An actually-dead session's room is torn
-        // down, so it never re-advertises — no false retraction.
-        markResumed(key: session.id)
-        // PULL the subagent's lifecycle status over its OWN connection, re-issued
-        // on every announce so it survives app relaunch (design 01M18PCM). The
-        // send itself is what makes the child room attach + answer.
-        if session.isSubagent, let connection = connections[relayID] {
-            let peerEPK = session.peerEPK
-            let roomID = session.roomID
-            Task { try? await connection.send(.getSessionInfo(id: UUID().uuidString),
-                                              toPeer: peerEPK, room: roomID) }
-        }
-    }
-
     /// The child subagent session for a subagents-panel record id, on the same
     /// machine as `parent`. nil until that subagent's room is announced.
     public func subagentSession(sessionID: String, under parent: LiveSession) -> LiveSession? {
@@ -982,14 +942,6 @@ extension AppModel {
                 && $0.relayID == parent.relayID
                 && $0.peerEPK == parent.peerEPK
         }
-    }
-
-    /// Resolve a relay (peer, roomID) ROUTING tuple to the pi-sessionId state key
-    /// (LiveSession.id) — for control frames keyed by roomID.
-    private func sessionKey(relayID: UUID, peer: String, roomID: String) -> String? {
-        sessions.values.first {
-            $0.relayID == relayID && $0.peerEPK == peer && $0.roomID == roomID
-        }?.id
     }
 }
 

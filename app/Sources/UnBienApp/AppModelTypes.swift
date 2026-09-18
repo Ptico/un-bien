@@ -79,6 +79,55 @@ public struct DaemonPresence: Equatable, Sendable {
     public func supports(_ cap: String) -> Bool { caps.contains(cap) }
 }
 
+/// One stored pi session from a machine daemon's `sessions_list_result`
+/// (resume flow) — pi's public SessionManager metadata, recency-sorted
+/// daemon-side. `id` is the pi session id: pi REUSES it on resume, which
+/// (with the UNBIEN_LAUNCH_REQ echo) makes the resumed room deterministically
+/// matchable.
+public struct StoredMachineSession: Identifiable, Equatable, Sendable {
+    public let path: String
+    public let id: String
+    public let name: String?
+    public let summary: String
+    public let cwd: String
+    public let modified: String
+    public let messageCount: Int
+    /// Row title: the session's /name when set, else its first-message prefix.
+    public var displayName: String {
+        if let name, !name.isEmpty { return name }
+        return String(summary.prefix(64))
+    }
+}
+
+/// A machine-level launch/resume we're waiting to auto-open (see
+/// `pendingMachineLaunches`). The daemon spawned pi with
+/// `UNBIEN_LAUNCH_REQ = <request id>`; the extension echoes that id in its
+/// room_meta (launchReq), so the new room's announce carries it verbatim and
+/// the match is deterministic for BOTH new launches and resumes — the same
+/// mechanism as the fork flow's `forked_from_req` echo.
+struct PendingMachineLaunch: Sendable {
+    var machineKey: String
+    var launchReq: String
+}
+
+/// Outcome of asking a machine's daemon for its stored sessions — distinguishes
+/// "none stored" from "the machine refused / never answered", which otherwise
+/// read identically as an empty list (and lied: "No stored sessions" when the
+/// daemon was actually gated or too old to answer `sessions_list`).
+public enum MachineSessionListing: Sendable {
+    /// The daemon answered. An EMPTY array is a real "nothing stored" — the
+    /// `session_resume` cap gate means the asker only reaches here on a
+    /// daemon that understands the verb.
+    case listed([StoredMachineSession])
+    /// The daemon answered with its error frame (unknown_peer /
+    /// permission_denied / list_failed). Either field may be absent.
+    case refused(code: String?, message: String?)
+    /// No reply within the timeout. The `session_resume` cap gate makes this
+    /// rare (the daemon advertised the cap, then died or stalled); it also
+    /// covers a daemon whose cap pull raced its shutdown.
+    case timeout
+}
+
 /// A named side-panel (plan, subagents, …) mirrored from a cooperating event
 /// source, surfaced as a top-bar item that badges when it changes.
 public struct PanelState: Identifiable, Equatable, Sendable {

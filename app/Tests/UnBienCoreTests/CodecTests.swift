@@ -24,7 +24,7 @@ final class CodecTests: XCTestCase {
 
     func testSessionLaunchEncodes() throws {
         let data = try JSONEncoder().encode(
-            ClientMessage.sessionLaunch(id: "l1", mode: "tmux", cwd: "/w", name: "job"))
+            ClientMessage.sessionLaunch(id: "l1", mode: "tmux", cwd: "/w", name: "job", resume: nil))
         let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
         XCTAssertEqual(obj["type"] as? String, "session_launch")
         XCTAssertEqual(obj["mode"] as? String, "tmux")
@@ -36,7 +36,7 @@ final class CodecTests: XCTestCase {
         // The app no longer chooses the backend — mode is omitted; the machine's
         // `launch.backend` config decides.
         let data = try JSONEncoder().encode(
-            ClientMessage.sessionLaunch(id: "l1", mode: nil, cwd: nil, name: nil))
+            ClientMessage.sessionLaunch(id: "l1", mode: nil, cwd: nil, name: nil, resume: nil))
         let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
         XCTAssertNil(obj["mode"])
         XCTAssertNil(obj["cwd"])

@@ -166,6 +166,22 @@ public final class AppModel: ObservableObject {
     /// session's first `session_sync_end`; matching it here drives the pop-to-
     /// root navigation. Consumed once per fork.
     var pendingForkReqs: Set<String> = []
+    /// Daemon `sessions_list` request/reply correlation (resume flow):
+    /// continuations parked by `listMachineSessions` under the request id,
+    /// resumed when the matching `sessions_list_result { in_reply_to }` ub
+    /// frame lands in handleUbFrame. The peer epk rides along so a daemon
+    /// `error` frame (which carries no in_reply_to) can fail the waits for
+    /// THAT machine. AppModel is @MainActor — race-free.
+    var pendingSessionLists: [String: (continuation: CheckedContinuation<JSONValue?, Never>, peer: String)] = [:]
+    /// Machine-level launch/resume expectations (auto-open the new chat):
+    /// registered by `launchOnMachine`, matched + consumed once in
+    /// upsertSession when the launched session's room announces. For RESUME
+    /// the match is deterministic — pi reuses the stored session's id. For a
+    /// NEW launch (no id knowable in advance) the match is snapshot-diff:
+    /// the first NEWLY-announced session id on that machine that we didn't
+    /// know at request time. Expired by a backstop task (60s) if the launch
+    /// failed silently — the stale entry must not hijack a later announce.
+    var pendingMachineLaunches: [String: PendingMachineLaunch] = [:]
 
     // MARK: - Preferences (persisted)
 
@@ -781,64 +797,6 @@ public final class AppModel: ObservableObject {
         if reply?["success"]?.boolValue != true, var s = sessions[session.id] {
             s.name = old
             sessions[session.id] = s
-        }
-    }
-
-    /// Fork from a conversation item (pre-release 2026-09-18). ctx.fork exists
-    /// ONLY on the command context — so the app sends the STRUCTURED
-    /// `session_fork` frame (ub plane) and the extension self-dispatches its
-    /// registered `/unbien fork` command to reach a command ctx (the slash
-    /// bootstrap is an extension implementation detail, not the app's job).
-    /// Downstream is the verified switch machinery: session_shutdown broadcast
-    /// → session_start{reason:"fork"} → the new session's room announces → a
-    /// NEW tile appears with the forked history. Demo: no connection → no-op.
-    func forkFromEntry(_ session: LiveSession, entryID: String) async {
-        guard let connection = connections[session.relayID] else { return }
-        let rid = UUID().uuidString
-        // Remember the request so the extension's `forked_from_req` echo (on the
-        // new session's first sync) auto-navigates us to the new tile.
-        pendingForkReqs.insert(rid)
-        // position "at": fork AT the tapped entry (keep up to and including it,
-        // continue in a new session). pi's default "before" REQUIRES a user
-        // message and THROWS on any other entry — but "Fork From Here" is offered
-        // on assistant rows too, so "before" silently failed there (no new
-        // session, no auto-nav). "at" is valid on any entry and matches the
-        // "from here" intent.
-        try? await connection.send(
-            .sessionFork(id: rid, entryID: entryID, position: "at"),
-            toPeer: session.peerEPK, room: session.roomID)
-    }
-
-    /// Clone a WHOLE session from the Home view (pi's `/clone`): fork AT the
-    /// session's current leaf — a duplicate that continues from the current
-    /// point in its own new session. Sources the leaf from the reducer's last
-    /// known cursor; no-op if we don't have one yet (nothing to clone from).
-    func cloneSession(_ session: LiveSession) async {
-        guard !isDemo(session) else { return }
-        guard let connection = connections[session.relayID] else { return }
-        guard let leaf = envelopeReducers[session.id]?.leafId, !leaf.isEmpty else { return }
-        let rid = UUID().uuidString
-        pendingForkReqs.insert(rid)
-        try? await connection.send(
-            .sessionFork(id: rid, entryID: leaf, position: "at"),
-            toPeer: session.peerEPK, room: session.roomID)
-    }
-
-    /// Branch from a conversation item — IN PLACE (AgentSession.navigateTree:
-    /// same session file, the leaf moves; /tree semantics). The extension
-    /// pushes the NEW leaf on the session_info channel the moment the
-    /// navigate commits — race-free (a refetch from here could round-trip
-    /// before the leaf moves) — and the app re-derives from that beacon. The
-    /// composer prefills with the row's text (what navigateTree would hand
-    /// back as editorText — sourced locally).
-    func branchFromEntry(_ session: LiveSession, entryID: String, prefill: String?) async {
-        guard let connection = connections[session.relayID] else { return }
-        let rid = UUID().uuidString
-        try? await connection.send(
-            .sessionNavigate(id: rid, entryID: entryID),
-            toPeer: session.peerEPK, room: session.roomID)
-        if let prefill, !prefill.isEmpty {
-            composerPrefill[session.id] = prefill
         }
     }
 

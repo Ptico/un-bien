@@ -131,3 +131,83 @@ final class RelayConnectionTests: XCTestCase {
         return URL(string: value)
     }
 }
+
+/// Plane-mapping regression guard (the silent-drop bug class).
+///
+/// `RelayConnection.mapToWire` routes every outbound ClientMessage to the rpc
+/// plane (pi-native verbs) or the ub plane (un-bien's own protocol). Its
+/// `default:` branch silently sends unrecognized types on the rpc plane — and
+/// the daemon/extension reads `env.ub` only, so a MISROUTED frame is dropped
+/// with no error on either side (the request just times out; happened with
+/// `sessions_list`). The expected-plane switch below has NO default: adding a
+/// ClientMessage case without classifying it fails to COMPILE this test.
+final class ClientMessagePlaneMappingTests: XCTestCase {
+    private static func expectedPlane(
+        _ message: ClientMessage
+    ) -> RelayConnection.WirePlane {
+        switch message {
+        case .sessionSync, .sessionLaunch, .presenceStatus, .getSessionInfo,
+             .terminate, .closeChildRoom, .sessionFork, .sessionNavigate,
+             .sessionsList:
+            // un-bien's own protocol — extension/daemon acts, inner type verbatim.
+            return .ub
+        case .pairRequest, .userMessage, .approveTool, .cancel, .ping,
+             .getEntries, .sessionNew, .sessionCompact, .getState, .modelSet,
+             .thinkingSet, .listModels, .extensionUiResponse, .clearQueue,
+             .setSessionName:
+            // pi-native rpc verbs (possibly renamed by mapToWire).
+            return .rpc
+        }
+    }
+
+    private static func samples() -> [(typeTag: String, message: ClientMessage)] {
+        [
+            ("pair_request", .pairRequest(id: "t", token: "t", deviceName: "t")),
+            ("user_message", .userMessage(id: "t", text: "t", images: nil, streamingBehavior: nil)),
+            ("approve_tool", .approveTool(id: "t", toolCallID: "t", decision: .allow)),
+            ("cancel", .cancel(id: "t", targetID: "t")),
+            ("ping", .ping(id: "t")),
+            ("session_sync", .sessionSync(id: "t", limit: nil)),
+            ("get_entries", .getEntries(id: "t", since: nil)),
+            ("session_new", .sessionNew(id: "t")),
+            ("session_compact", .sessionCompact(id: "t")),
+            ("get_state", .getState(id: "t")),
+            ("model_set", .modelSet(id: "t", provider: "p", modelID: "m")),
+            ("thinking_set", .thinkingSet(id: "t", level: .off)),
+            ("list_models", .listModels(id: "t")),
+            ("session_launch", .sessionLaunch(id: "t", mode: nil, cwd: nil, name: nil, resume: nil)),
+            ("sessions_list", .sessionsList(id: "t", scope: "all", cwd: nil, filter: nil)),
+            ("presence_status", .presenceStatus(id: "t")),
+            ("get_session_info", .getSessionInfo(id: "t")),
+            ("extension_ui_response", .extensionUiResponse(
+                ExtensionUiResponse(id: "t", value: nil, confirmed: nil, cancelled: nil, ask: nil))),
+            ("clear_queue", .clearQueue(id: "t")),
+            ("set_session_name", .setSessionName(id: "t", name: "n")),
+            ("session_fork", .sessionFork(id: "t", entryID: "e", position: nil)),
+            ("session_navigate", .sessionNavigate(id: "t", entryID: "e")),
+            ("terminate", .terminate(id: "t", reason: nil)),
+            ("close_child_room", .closeChildRoom(id: "t", roomID: "r")),
+        ]
+    }
+
+    func testEveryClientMessageMapsToItsIntendedPlane() throws {
+        for (typeTag, message) in Self.samples() {
+            let data = try Codec.encodeClientBody(message)
+            let frame = try JSONDecoder().decode(JSONValue.self, from: data)
+            let (plane, mapped) = RelayConnection.mapToWire(frame)
+
+            XCTAssertEqual(
+                plane, Self.expectedPlane(message),
+                "\(typeTag) routed to the wrong plane — a misroute here is a SILENT drop " +
+                    "on the receiving side (the daemon/extension reads only one plane).")
+
+            if plane == .ub {
+                // ub frames keep their inner type verbatim — the daemon
+                // dispatches on it (handleUbFrame switches on ub.type).
+                XCTAssertEqual(
+                    mapped["type"]?.stringValue, typeTag,
+                    "\(typeTag) must keep its inner type on the ub plane.")
+            }
+        }
+    }
+}

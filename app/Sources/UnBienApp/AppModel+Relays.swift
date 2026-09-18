@@ -249,15 +249,260 @@ extension AppModel {
     /// `session_launch` to the machine's control room, where the presence daemon
     /// spawns it. The new session then appears via the normal room-announce
     /// discovery. The machine's `launch.backend` config decides the backend.
-    public func launchOnMachine(cwd: String?, name: String?, machine: PairedMachine) async {
+    ///
+    /// `resume` relaunches a STORED pi session (from `listMachineSessions`)
+    /// instead of starting fresh — the daemon passes `--session <path>` to pi.
+    /// Either way the daemon spawns pi with `UNBIEN_LAUNCH_REQ = <request id>`
+    /// and the extension echoes it in room_meta, so upsertSession can match the
+    /// announcing room to THIS request and auto-open the chat (pending-
+    /// MachineLaunches). Returns the request id (nil = not sent — no
+    /// connection / no control room). Old daemons ignore the id and the launch
+    /// still surfaces via plain discovery after the 60s backstop expires.
+    @discardableResult
+    public func launchOnMachine(cwd: String?, name: String?,
+                                resume: String? = nil,
+                                machine: PairedMachine) async -> String? {
         guard let connection = connections[machine.relayID],
-              let room = Base64.deriveControlRoom(epk: machine.epk) else { return }
+              let room = Base64.deriveControlRoom(epk: machine.epk) else { return nil }
         let trimmedCwd = cwd?.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedName = name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedResume = resume?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let rid = UUID().uuidString
+        pendingMachineLaunches[rid] = PendingMachineLaunch(
+            machineKey: machineCapsKey(relayID: machine.relayID, epk: machine.epk),
+            launchReq: rid)
+        // Backstop: a launch that never comes live (daemon died mid-spawn,
+        // spawn failed after the gate) must not hijack a LATER announce's
+        // auto-open. Expire quietly — the session still surfaces via plain
+        // discovery when/if it does announce.
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 60_000_000_000)
+            _ = self?.pendingMachineLaunches.removeValue(forKey: rid)
+        }
         try? await connection.send(
-            .sessionLaunch(id: UUID().uuidString, mode: nil,
+            .sessionLaunch(id: rid, mode: nil,
                            cwd: (trimmedCwd?.isEmpty ?? true) ? nil : trimmedCwd,
-                           name: (trimmedName?.isEmpty ?? true) ? nil : trimmedName),
+                           name: (trimmedName?.isEmpty ?? true) ? nil : trimmedName,
+                           resume: (trimmedResume?.isEmpty ?? true) ? nil : trimmedResume),
             toPeer: machine.epk, room: room)
+        return rid
+    }
+
+    /// List a machine's STORED pi sessions (resume flow): send `sessions_list`
+    /// to its presence daemon's control room and await the correlated
+    /// `sessions_list_result` (parked under the request id, resumed from
+    /// handleUbFrame — same request/reply shape as `sendAwaitingReply`). A
+    /// daemon `error` frame (unknown_peer / permission_denied / list_failed —
+    /// none carry in_reply_to) fails the wait for THAT machine, so refusals
+    /// surface as `.refused` instead of reading as "nothing stored". The
+    /// returned listing distinguishes empty / refused / timeout — the sheet
+    /// renders each truthfully (a pre-`session_resume` daemon never gets here:
+    /// the affordance is cap-gated upstream).
+    public func listMachineSessions(machine: PairedMachine,
+                                    filter: String? = nil) async -> MachineSessionListing {
+        guard let connection = connections[machine.relayID],
+              let room = Base64.deriveControlRoom(epk: machine.epk) else {
+            return .refused(code: nil, message: "machine not connected")
+        }
+        let rid = UUID().uuidString
+        let peer = machine.epk
+        let reply: JSONValue? = await withCheckedContinuation { continuation in
+            pendingSessionLists[rid] = (continuation, peer)
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 10_000_000_000)
+                if let parked = self?.pendingSessionLists.removeValue(forKey: rid) {
+                    parked.continuation.resume(returning: nil)
+                }
+            }
+            Task { @MainActor [weak self] in
+                do {
+                    try await connection.send(
+                        .sessionsList(id: rid, scope: "all", cwd: nil, filter: filter),
+                        toPeer: peer, room: room)
+                } catch {
+                    if let parked = self?.pendingSessionLists.removeValue(forKey: rid) {
+                        parked.continuation.resume(returning: nil)
+                    }
+                }
+            }
+        }
+        // Timeout (or send failure): no reply landed.
+        guard let reply else { return .timeout }
+        // The daemon's error frame (unknown_peer / permission_denied /
+        // list_failed) — resumed via the peer-error path in handleUbFrame.
+        if reply["type"]?.stringValue == "error" {
+            return .refused(code: reply["code"]?.stringValue,
+                            message: reply["message"]?.stringValue)
+        }
+        guard let sessions = reply["sessions"]?.arrayValue else { return .timeout }
+        return .listed(sessions.compactMap { s in
+            guard let path = s["path"]?.stringValue,
+                  let id = s["id"]?.stringValue else { return nil }
+            return StoredMachineSession(
+                path: path,
+                id: id,
+                name: s["name"]?.stringValue,
+                summary: s["summary"]?.stringValue ?? "",
+                cwd: s["cwd"]?.stringValue ?? "",
+                modified: s["modified"]?.stringValue ?? "",
+                messageCount: s["messageCount"]?.intValue ?? 0)
+        })
+    }
+
+    // MARK: - Fork / clone / branch (carved from AppModel.swift — line cap)
+
+    /// Fork from a conversation item (pre-release 2026-09-18). ctx.fork exists
+    /// ONLY on the command context — so the app sends the STRUCTURED
+    /// `session_fork` frame (ub plane) and the extension self-dispatches its
+    /// registered `/unbien fork` command to reach a command ctx (the slash
+    /// bootstrap is an extension implementation detail, not the app's job).
+    /// Downstream is the verified switch machinery: session_shutdown broadcast
+    /// → session_start{reason:"fork"} → the new session's room announces → a
+    /// NEW tile appears with the forked history. Demo: no connection → no-op.
+    func forkFromEntry(_ session: LiveSession, entryID: String) async {
+        guard let connection = connections[session.relayID] else { return }
+        let rid = UUID().uuidString
+        // Remember the request so the extension's `forked_from_req` echo (on the
+        // new session's first sync) auto-navigates us to the new tile.
+        pendingForkReqs.insert(rid)
+        // position "at": fork AT the tapped entry (keep up to and including it,
+        // continue in a new session). pi's default "before" REQUIRES a user
+        // message and THROWS on any other entry — but "Fork From Here" is offered
+        // on assistant rows too, so "before" silently failed there (no new
+        // session, no auto-nav). "at" is valid on any entry and matches the
+        // "from here" intent.
+        try? await connection.send(
+            .sessionFork(id: rid, entryID: entryID, position: "at"),
+            toPeer: session.peerEPK, room: session.roomID)
+    }
+
+    /// Clone a WHOLE session from the Home view (pi's `/clone`): fork AT the
+    /// session's current leaf — a duplicate that continues from the current
+    /// point in its own new session. Sources the leaf from the reducer's last
+    /// known cursor; no-op if we don't have one yet (nothing to clone from).
+    func cloneSession(_ session: LiveSession) async {
+        guard !isDemo(session) else { return }
+        guard let connection = connections[session.relayID] else { return }
+        guard let leaf = envelopeReducers[session.id]?.leafId, !leaf.isEmpty else { return }
+        let rid = UUID().uuidString
+        pendingForkReqs.insert(rid)
+        try? await connection.send(
+            .sessionFork(id: rid, entryID: leaf, position: "at"),
+            toPeer: session.peerEPK, room: session.roomID)
+    }
+
+    /// Branch from a conversation item — IN PLACE (AgentSession.navigateTree:
+    /// same session file, the leaf moves; /tree semantics). The extension
+    /// pushes the NEW leaf on the session_info channel the moment the
+    /// navigate commits — race-free (a refetch from here could round-trip
+    /// before the leaf moves) — and the app re-derives from that beacon. The
+    /// composer prefills with the row's text (what navigateTree would hand
+    /// back as editorText — sourced locally).
+    func branchFromEntry(_ session: LiveSession, entryID: String, prefill: String?) async {
+        guard let connection = connections[session.relayID] else { return }
+        let rid = UUID().uuidString
+        try? await connection.send(
+            .sessionNavigate(id: rid, entryID: entryID),
+            toPeer: session.peerEPK, room: session.roomID)
+        if let prefill, !prefill.isEmpty {
+            composerPrefill[session.id] = prefill
+        }
+    }
+}
+
+// MARK: - Room upsert (carved from AppModel+Inbound.swift — line cap): the
+// single funnel every room listing / announce flows through, plus the launch
+// auto-open matcher (resume flow). State stays on AppModel; this extension
+// only routes it.
+extension AppModel {
+    func upsertSession(relayID: UUID, peer: String, room: RoomInfo) {
+        // The presence daemon's control room is not a chat session: it carries the
+        // `is_daemon` cap, its roomId is the control-room derivation, and it has no
+        // pi sessionId (a real session's wire identity).
+        if room.caps?.contains("is_daemon") == true { return }
+        if let control = Base64.deriveControlRoom(epk: peer), room.roomID == control { return }
+        guard let sessionID = room.sessionID else { return }
+        var session = LiveSession(relayID: relayID, peerEPK: peer, roomID: room.roomID,
+                                  sessionID: sessionID,
+                                  name: room.name, cwd: room.cwd, model: nil,
+                                  parentSessionID: room.parentSessionID,
+                                  parentRoomID: room.parent, subagentID: room.subagentID)
+        // Manual dismissal (plan 01M18X3B): an ended chat the user removed
+        // stays hidden — a snapshot re-listing or re-announce is the room
+        // LINGERING at the relay, not liveness. Only proof of life (a fresh
+        // `ub hello`) or a genuine roomEnded clears the pin.
+        if dismissedSessions[session.id] != nil { return }
+        // Carry a known status across re-announce (reconnect/relaunch replays
+        // room_announced); the pull below refreshes it.
+        let isNewRoom = sessions[session.id] == nil
+        session.status = sessions[session.id]?.status
+        sessions[session.id] = session
+        // Seed caps from the room announce (design 01M1SJDZ): the ub hello only
+        // arrives on ATTACH, so pre-attach (Home) this is how End Chat learns
+        // remote_terminate for a session you haven't opened. Seed-if-absent
+        // only — the hello stays authoritative once attached. (is_daemon /
+        // control rooms already returned above, so room.caps here is a session
+        // cap set.)
+        if capabilities[session.id] == nil, let caps = room.caps, !caps.isEmpty {
+            capabilities[session.id] = Set(caps)
+        }
+        // FORK AUTO-NAV pull: a fork/clone is pending and a NEW room just
+        // appeared — it may be the fork-born session. session_sync normally
+        // fires only on openSession (view appear), which won't happen until the
+        // user opens it, so proactively sync here to pull `forked_from_req` and
+        // trigger the pop-to-root navigation without the user tapping in.
+        if isNewRoom, !pendingForkReqs.isEmpty, let connection = connections[relayID] {
+            let peerEPK = session.peerEPK
+            let roomID = session.roomID
+            Task { try? await connection.send(.sessionSync(id: UUID().uuidString, limit: nil),
+                                              toPeer: peerEPK, room: roomID) }
+        }
+        // LAUNCH AUTO-NAV (resume flow): a machine-level launch/resume WE
+        // requested and a NEW room on that machine just announced. The daemon
+        // spawned pi with UNBIEN_LAUNCH_REQ = <our request id> and the
+        // extension echoed it in room_meta (launchReq), so the match is
+        // deterministic for BOTH new launches and resumes — no "which room is
+        // it" race. Consumed once; the 60s backstop in launchOnMachine
+        // expires a launch that never came live. Old daemons (no echo): the
+        // pending entry times out quietly and the session still surfaces via
+        // plain discovery — today's behavior.
+        if isNewRoom, !pendingMachineLaunches.isEmpty {
+            let mkey = machineCapsKey(relayID: relayID, epk: peer)
+            if let reqID = room.launchReq,
+               let pending = pendingMachineLaunches[reqID],
+               pending.machineKey == mkey {
+                pendingMachineLaunches[reqID] = nil
+                // Append-on-top navigation (we launched from Home root), then
+                // FULL reconstruction like the fork path: the announce alone
+                // carries no transcript, so open the session now — openSession
+                // is idempotent alongside TranscriptView's own .task.
+                pendingSessionNav = session
+                Task { await openSession(session) }
+            }
+        }
+        // A re-advertised room means the session is live again — the resume
+        // flow: the OUTGOING extension instance broadcast session_shutdown
+        // (banner up), then the fresh instance re-joined the SAME room under
+        // the durable session id. Covers room_announced pushes AND rooms_check
+        // recovery on (re)connect. An actually-dead session's room is torn
+        // down, so it never re-advertises — no false retraction.
+        markResumed(key: session.id)
+        // PULL the subagent's lifecycle status over its OWN connection, re-issued
+        // on every announce so it survives app relaunch (design 01M18PCM). The
+        // send itself is what makes the child room attach + answer.
+        if session.isSubagent, let connection = connections[relayID] {
+            let peerEPK = session.peerEPK
+            let roomID = session.roomID
+            Task { try? await connection.send(.getSessionInfo(id: UUID().uuidString),
+                                              toPeer: peerEPK, room: roomID) }
+        }
+    }
+
+    /// Resolve a relay (peer, roomID) ROUTING tuple to the pi-sessionId state key
+    /// (LiveSession.id) — for control frames keyed by roomID.
+    func sessionKey(relayID: UUID, peer: String, roomID: String) -> String? {
+        sessions.values.first {
+            $0.relayID == relayID && $0.peerEPK == peer && $0.roomID == roomID
+        }?.id
     }
 }

@@ -25,6 +25,9 @@ extension ClientMessage: Codable {
         static let mode = CodingKeys("mode")
         static let cwd = CodingKeys("cwd")
         static let name = CodingKeys("name")
+        static let resume = CodingKeys("resume")
+        static let scope = CodingKeys("scope")
+        static let filter = CodingKeys("filter")
         static let value = CodingKeys("value")
         static let confirmed = CodingKeys("confirmed")
         static let cancelled = CodingKeys("cancelled")
@@ -80,11 +83,17 @@ extension ClientMessage: Codable {
             try container.encode(level, forKey: .level)
         case let .listModels(id):
             try container.encode(id, forKey: .id)
-        case let .sessionLaunch(id, mode, cwd, name):
+        case let .sessionLaunch(id, mode, cwd, name, resume):
             try container.encode(id, forKey: .id)
             try container.encodeIfPresent(mode, forKey: .mode)
             try container.encodeIfPresent(cwd, forKey: .cwd)
             try container.encodeIfPresent(name, forKey: .name)
+            try container.encodeIfPresent(resume, forKey: .resume)
+        case let .sessionsList(id, scope, cwd, filter):
+            try container.encode(id, forKey: .id)
+            try container.encode(scope, forKey: .scope)
+            try container.encodeIfPresent(cwd, forKey: .cwd)
+            try container.encodeIfPresent(filter, forKey: .filter)
         case let .presenceStatus(id):
             try container.encode(id, forKey: .id)
         case let .getSessionInfo(id):

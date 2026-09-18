@@ -11,6 +11,10 @@ struct HomeView: View {
     @State private var settingsRelay: RelayConfig?
     @State private var showSettings = false
     @State private var launchTarget: LaunchTarget?
+    /// The machine whose long-press menu asked for the stored-session resume
+    /// picker (ResumeSessionSheet). Machine-level, like the launch chip (user
+    /// UX decision 2026-08-31): the daemon is the single launch surface.
+    @State private var resumeTarget: PairedMachine?
     @AppStorage("hideLaunchChipUntilDaemonUp") private var hideChipUntilDaemonUp = false
     /// Parents whose subagent children are folded away in the Home list. A parent
     /// is EXPANDED unless listed here, so children show by default.
@@ -94,6 +98,9 @@ struct HomeView: View {
         .sheet(item: $launchTarget) { target in
             LaunchSessionSheet(target: target).environmentObject(model)
         }
+        .sheet(item: $resumeTarget) { machine in
+            ResumeSessionSheet(machine: machine).environmentObject(model)
+        }
     }
 
     private var emptyState: some View {
@@ -169,9 +176,9 @@ struct HomeView: View {
                         // list-level (see .task below) so a HIDDEN machine is still
                         // probed — else hide-until-up would never un-hide.
                         ForEach(visibleMachines) { machine in
-                            MachineLaunchRow(machine: machine) {
-                                launchTarget = .machine(machine)
-                            }
+                            MachineLaunchRow(machine: machine,
+                                             onLaunch: { launchTarget = .machine(machine) },
+                                             onResume: { resumeTarget = machine })
                         }
                         // Known machine whose rooms are gated (unpaired / revoked /
                         // re-keyed): offer re-pair instead of a silent empty listing.
@@ -555,6 +562,7 @@ private struct MachineLaunchRow: View {
     @Environment(\.appTheme) private var theme
     let machine: PairedMachine
     let onLaunch: () -> Void
+    let onResume: () -> Void
 
     var body: some View {
         HStack(spacing: 10) {
@@ -580,6 +588,25 @@ private struct MachineLaunchRow: View {
             }
         }
         .padding(.vertical, 2)
+        // Long-press menu (user 2026-09-xx): New Conversation… mirrors the
+        // chip; Resume Session… opens the stored-session picker. Machine-level
+        // both — the daemon is the single launch surface (2026-08-31). Resume
+        // is additionally gated on the `session_resume` cap: a pre-cap daemon
+        // would silently ignore `sessions_list` (unknown frame) and the sheet
+        // would lie "No stored sessions" after a 10s timeout. Version gate,
+        // not a feature toggle.
+        .contextMenu {
+            if model.daemonSupports("remote_launch", machine: machine) {
+                Button(action: onLaunch) {
+                    Label("New Conversation…", systemImage: "plus.bubble")
+                }
+                if model.daemonSupports("session_resume", machine: machine) {
+                    Button(action: onResume) {
+                        Label("Resume Session…", systemImage: "clock.arrow.circlepath")
+                    }
+                }
+            }
+        }
     }
 
     private var subtitle: String {
