@@ -40,7 +40,7 @@ pub fn is_pair_envelope(ct: &str) -> bool {
 #[cfg(test)]
 mod pair_envelope_tests {
     use super::is_pair_envelope;
-    use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
+    use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
 
     fn ct_of(json: &str) -> String {
         B64.encode(json.as_bytes())
