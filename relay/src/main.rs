@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use tokio::net::TcpListener;
-use tracing::info;
+use tracing::{error, info, warn};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -54,7 +54,9 @@ async fn main() -> anyhow::Result<()> {
     let pairing_db = relay::paths::resolve_pairing_db_path();
     let pairing = Arc::new(
         relay::PairingRegistry::with_store(&pairing_db).unwrap_or_else(|e| {
-            eprintln!(
+            // tracing (not eprintln!): lands in relay.log DATESTAMPED — an
+            // undated fallback notice is undiagnosable next to dated lines.
+            warn!(
                 "pairing store open failed at {}: {e}; falling back to in-memory (still fail-closed; re-pushed on each connect)",
                 pairing_db.display()
             );
@@ -108,6 +110,39 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// `debug.relay` pref: the relay has no CLI/config surface of its own, so it
+/// reads the SAME global un-bien config the extension uses —
+/// `$PI_CODING_AGENT_DIR|~/.pi` + `/extensions/un-bien.json` — and, when
+/// `debug.relay` is true, upgrades the filter to INFO (mesh storage, listen,
+/// peer/room lifecycle — all datestamped by the fmt layers). An explicit
+/// RUST_LOG always wins; the default (pref off / config unreadable) is
+/// today's behavior — `EnvFilter::from_default_env()`, ERROR-only when
+/// RUST_LOG is unset. Read ONCE at startup; restart the relay to pick up a
+/// flip.
+fn relay_log_filter() -> tracing_subscriber::EnvFilter {
+    if std::env::var_os("RUST_LOG").is_some() {
+        return tracing_subscriber::EnvFilter::from_default_env();
+    }
+    let enabled = std::env::var("PI_CODING_AGENT_DIR")
+        .map(std::path::PathBuf::from)
+        .or_else(|_| std::env::var("HOME").map(|h| std::path::PathBuf::from(h).join(".pi")))
+        .map(|base| base.join("extensions").join("un-bien.json"))
+        .ok()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+        .and_then(|v| {
+            v.get("debug")
+                .and_then(|d| d.get("relay"))
+                .and_then(|b| b.as_bool())
+        })
+        .unwrap_or(false);
+    if enabled {
+        tracing_subscriber::EnvFilter::try_new("info").unwrap_or_default()
+    } else {
+        tracing_subscriber::EnvFilter::from_default_env()
+    }
+}
+
 /// Install the global subscriber: stdout exactly as `tracing_subscriber::
 /// fmt::init()` behaved (same default fmt layer, same `EnvFilter` from
 /// `RUST_LOG`), plus a best-effort second layer appending to
@@ -125,7 +160,7 @@ fn init_tracing() {
             .with_writer(std::sync::Mutex::new(file))
     });
     tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::from_default_env())
+        .with(relay_log_filter())
         .with(tracing_subscriber::fmt::layer())
         .with(file_layer)
         .init();
@@ -147,7 +182,10 @@ fn open_relay_log() -> Option<std::fs::File> {
     match open() {
         Ok(file) => Some(file),
         Err(err) => {
-            eprintln!(
+            // tracing (not eprintln!): datestamped on stdout — which the
+            // service units redirect into relay.log — so this notice lines up
+            // with the rest of the log even though the file layer is off.
+            error!(
                 "unbien-relay: cannot open log file at {} ({err}); logging to stdout only",
                 path.display()
             );
