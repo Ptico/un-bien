@@ -26,6 +26,7 @@ const storage = await import("./storage.js")
 const {
   getOrCreateEd25519Keypair,
   KeyringUnavailableError,
+  _setDaemonFileOnlyModeForTest,
   _setKeyStoreBackendForTest,
   _setKeyringExpectedForTest,
   _setKeyringRetryForTest,
@@ -115,6 +116,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   _setKeyStoreBackendForTest(null)
+  _setDaemonFileOnlyModeForTest(false)
   _setKeyringExpectedForTest(null)
   _setKeyringRetryForTest(null)
   _setNativeBindingErrorForTest(null)
@@ -813,5 +815,58 @@ describe("owner snapshot mutation tokens", () => {
         { name: "standard", remote_epk: standardHandle, paired_at: "second" },
       ],
     })
+  })
+})
+
+// ── Launcher-daemon mode (file-only; never the keyring) ────────────────────
+
+describe("getOrCreateEd25519Keypair — launcher daemon mode", () => {
+  test("ignores config + keyring entirely; mints to the FILE on first run", async () => {
+    // The keyring HOLDS an identity (the interactive session's key) - daemon
+    // mode must not read it: the installer provisions identity.json instead,
+    // and a keyring read from a launchd/systemd context can hang.
+    const backend = new InMemoryBackend()
+    const keyringKey = JSON.stringify({
+      pk: Buffer.from(new Uint8Array(32).fill(1)).toString("base64"),
+      sk: Buffer.from(new Uint8Array(64).fill(2)).toString("base64"),
+    })
+    backend.store.set(`${NEW_SERVICE}|${ACCOUNT}`, keyringKey)
+    _setKeyStoreBackendForTest(backend)
+    _setDaemonFileOnlyModeForTest(true)
+
+    const kp = await getOrCreateEd25519Keypair()
+
+    // ZERO keyring reads - not even an attempt.
+    expect(backend.reads.length).toBe(0)
+    // The keyring-held identity was NOT returned (it would fork the machine
+    // identity if adopted without provisioning): the daemon minted its own
+    // FILE identity instead.
+    expect(Buffer.from(kp.publicKey).toString("base64")).not.toBe(
+      Buffer.from(new Uint8Array(32).fill(1)).toString("base64"),
+    )
+    expect(existsSync(_IDENTITY_FILE_FOR_TEST)).toBe(true)
+  })
+
+  test("returns the file-stored identity when present (no keyring, no mint)", async () => {
+    const backend = new InMemoryBackend()
+    backend.store.set(`${NEW_SERVICE}|${ACCOUNT}`, JSON.stringify({
+      pk: Buffer.from(new Uint8Array(32).fill(1)).toString("base64"),
+      sk: Buffer.from(new Uint8Array(64).fill(2)).toString("base64"),
+    }))
+    _setKeyStoreBackendForTest(backend)
+    _setDaemonFileOnlyModeForTest(true)
+    // Simulate the installer's provisioning: file exists with THE key.
+    const fileKey = JSON.stringify({
+      pk: Buffer.from(new Uint8Array(32).fill(9)).toString("base64"),
+      sk: Buffer.from(new Uint8Array(64).fill(8)).toString("base64"),
+    })
+    writeFileSync(_IDENTITY_FILE_FOR_TEST, fileKey, { mode: 0o600 })
+
+    const kp = await getOrCreateEd25519Keypair()
+    expect(Buffer.from(kp.publicKey).toString("base64")).toBe(
+      Buffer.from(new Uint8Array(32).fill(9)).toString("base64"),
+    )
+    expect(backend.reads.length).toBe(0)
+    expect(backend.writes.length).toBe(0)
   })
 })

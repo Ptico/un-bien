@@ -34,6 +34,28 @@ The seed lives in one **selected backend**, configured in `un-bien.json`
 On a host with no usable keyring (headless Linux, a Bun-built `pi`), the file
 backend is used automatically regardless of config.
 
+## The launcher daemon: file-only, always
+
+The **launcher daemon** (launchd/systemd service) never reads the platform
+keyring — by design, not config. A keyring read from a headless service
+context was observed to hang, and even where one succeeds the daemon would
+depend on an unlocked user session. Its resolution is strictly:
+
+1. `UNBIEN_IDENTITY_SEED` env (if the operator sets it in the unit),
+2. `identity.json` (the installer provisions this before the service starts),
+3. **loud fail** — never mint (pairings prove a key existed; minting would
+   orphan them).
+
+Consequences:
+
+- `/unbien install launcher` provisions `identity.json` (0600) and prints the
+  path in its summary. It deliberately does **not** modify
+  `identity.storage` in `un-bien.json` — that setting governs *interactive*
+  pi sessions only. Flipping it to `keychain` is safe for interactive use;
+  the daemon ignores it.
+- The **relay** has no signing identity at all (peers authenticate to it; it
+  only verifies), so it has no identity storage either.
+
 ## Resolution order
 
 1. **`UNBIEN_IDENTITY_SEED`** env override — read-only, always wins.

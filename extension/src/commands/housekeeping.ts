@@ -201,16 +201,20 @@ export async function _cmdInstallTarget(
   for (const component of want) {
     if (component === "launcher") {
       ctx.ui.notify("[un-bien] installing launcher daemon…", "info")
-      // Headless-service identity: the daemon cannot interact with keychain
-      // UI (a launchd context hang was observed) — pin the keypair to the
-      // file backend before the service starts. Key UNCHANGED.
+      // Headless-service identity: the launcher NEVER touches the keychain
+      // (file-only daemon mode; a launchd-context keyring read was observed
+      // to hang). Ensure identity.json exists so the daemon resolves its
+      // key from disk. Key UNCHANGED — and the config's identity.storage
+      // is left alone: it governs interactive pi sessions only.
       try {
         const { provisionFileIdentity } = await import("../pairing/storage.js")
-        const { saveConfig } = await import("../config.js")
         const { path, wrote } = await provisionFileIdentity()
-        saveConfig({ identity: { storage: "file" } })
-        if (wrote)
-          summary.push(`[un-bien] identity pinned to ${path} (file storage)`)
+        summary.push(
+          `[un-bien] launcher identity: file backend (${path})` +
+            (wrote ? " — provisioned." : " — already present.") +
+            ` The launcher daemon is file-stored by design (never the keychain);`,
+          `  config identity.storage applies to interactive pi sessions only.`,
+        )
       } catch (err) {
         ok = false
         summary.push(`[un-bien] identity provisioning failed: ${String(err)}`)

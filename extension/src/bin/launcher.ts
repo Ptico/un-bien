@@ -16,6 +16,7 @@ import { fileURLToPath } from "node:url"
 import { dirname, join } from "node:path"
 import { startLauncher } from "../launcher/launcher.js"
 import { launcherLog } from "../session/debug_log.js"
+import { setLauncherDaemonIdentityMode } from "../pairing/storage.js"
 
 /** Package version for --version reporting (the deploy-stale-binary trap
  *  makes "which build is running" the first diagnostic question). */
@@ -33,6 +34,11 @@ function version(): string {
 }
 
 async function main(): Promise<void> {
+  // The daemon resolves its identity from the FILE backend only — never the
+  // platform keyring (headless service; a launchd-context keyring read was
+  // observed to hang). The installer provisions identity.json before this
+  // runs. Config identity.storage governs interactive pi sessions only.
+  setLauncherDaemonIdentityMode()
   const arg = process.argv[2]
   if (arg === "--version" || arg === "-V") {
     // eslint-disable-next-line no-console

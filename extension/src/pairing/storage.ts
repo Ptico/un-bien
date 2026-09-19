@@ -394,6 +394,24 @@ export function _setKeyringRetryForTest(
   _keyringRetryDelayMs = delayMs ?? 300
 }
 
+// ── Launcher-daemon mode: FILE-ONLY identity reads ───────────────────────────
+//
+// The launcher daemon is a headless launchd/systemd service. It must NEVER
+// touch the platform keyring: headless contexts have no unlocked user
+// keyring, and a keyring read from a launchd/systemd context was observed to
+// HANG. The installer provisions identity.json before the service starts, so
+// the daemon's resolution is: env seed → identity.json → loud fail.
+// Set by the launcher entrypoint at startup; identity.storage in the config
+// governs INTERACTIVE pi sessions only and is intentionally ignored here.
+let _daemonFileOnlyMode = false
+export function setLauncherDaemonIdentityMode(): void {
+  _daemonFileOnlyMode = true
+}
+/** Test-only: flip daemon mode (the real entrypoint sets it at startup). */
+export function _setDaemonFileOnlyModeForTest(value: boolean): void {
+  _daemonFileOnlyMode = value
+}
+
 function _sleep(ms: number): Promise<void> {
   return ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Promise.resolve()
 }
@@ -478,11 +496,12 @@ function _isENOENT(err: unknown): boolean {
 
 
 /**
- * Headless-service provisioning (launchd/systemd daemons cannot interact with
- * keychain UI): pin the machine keypair to the FILE backend so daemon contexts
- * resolve it without keychain access. Writes `identity.json` (0600) when
- * absent; the caller sets `identity.storage: "file"` alongside. The key is
- * UNCHANGED — this only adds a second read path for the same identity.
+ * Headless-service provisioning (the launcher daemon runs FILE-ONLY — see
+ * setLauncherDaemonIdentityMode): resolve the machine keypair in THIS
+ * (interactive) session — where the keychain may hold it — and write
+ * `identity.json` (0600) when absent so the daemon context resolves the same
+ * key from disk. The key is UNCHANGED; the config's identity.storage is NOT
+ * modified (it governs interactive pi sessions only).
  */
 export async function provisionFileIdentity(): Promise<{ path: string; wrote: boolean }> {
   const kp = await getOrCreateEd25519Keypair()
@@ -653,7 +672,9 @@ export async function getOrCreateEd25519Keypair(): Promise<Ed25519Keypair> {
   if (override) return override
 
   const backend = _getBackend()
-  const selected = _selectedStorageBackend()
+  // Launcher-daemon mode pins the selection to file: the daemon never reads
+  // the keyring (see the daemon-mode block above for why).
+  const selected = _daemonFileOnlyMode ? "file" : _selectedStorageBackend()
   const filePath = _identityFilePath()
 
   let keychain: KeychainReadResult | null = null
@@ -668,7 +689,8 @@ export async function getOrCreateEd25519Keypair(): Promise<Ed25519Keypair> {
     const fromFile = await _readKeypairFromFile(filePath)
     if (fromFile) return fromFile
     // Migration read-in-place of the keychain — only where one could exist.
-    if (_keyringExpectedAvailable()) {
+    // NEVER in launcher-daemon mode: file-only by design.
+    if (_keyringExpectedAvailable() && !_daemonFileOnlyMode) {
       keychain = await _readKeychain(backend)
       if (keychain.ok && keychain.kp) return keychain.kp
     }
