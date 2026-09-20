@@ -49,7 +49,7 @@
     "extensions": [
       "./dist"
     ],
-    "image": "https://cdn.jsdelivr.net/npm/@geohar/un-bien/assets/preview.png"
+    "image": "https://raw.githubusercontent.com/georgeharker/un-bien/main/extension/assets/preview.png"
   },
   "author": "George Harker <georgeharker@gmail.com>",
   "contributors": [
