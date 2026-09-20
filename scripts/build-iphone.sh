@@ -39,7 +39,10 @@ if [ -z "$DEVICE_NAME" ]; then
   xcrun devicectl list devices
   exit 1
 fi
-UDID=$(xcrun devicectl list devices 2>/dev/null | awk -v n="$DEVICE_NAME" '$1==n {print $3; exit}')
+# devicectl output columns shift (hostname can be empty) and newer versions
+# append a "(UDID)" suffix after the identifier - so scan for the UUID-shaped
+# token on the matching row instead of a fixed column.
+UDID=$(xcrun devicectl list devices 2>/dev/null | awk -v n="$DEVICE_NAME" '$1==n { for (i=2; i<=NF; i++) if ($i ~ /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{12,}$/) { print $i; exit } }')
 if [ -z "$UDID" ]; then
   echo "ERROR: device '$DEVICE_NAME' not found. Connected devices:"
   xcrun devicectl list devices
