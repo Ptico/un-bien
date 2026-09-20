@@ -29,6 +29,7 @@ import {
   saveLocalConfig,
 } from "../session/local_config.js"
 import { skillsDir } from "../session/global_config.js"
+import { notifyOwners } from "../session/owner_notify.js"
 import { spawnSync } from "node:child_process"
 import {
   copyFileSync,
@@ -252,8 +253,12 @@ export async function _cmdInstallTarget(
     }
   }
 
-  // The DURABLE report — last toast standing, nothing after it to wipe it.
-  ctx.ui.notify(summary.join("\n"), ok ? "info" : "error")
+  // The DURABLE report — last toast standing locally, and broadcast to
+  // attached app owners as a transient toast (slash commands run remotely:
+  // this is their only feedback surface).
+  const report = summary.join("\n")
+  ctx.ui.notify(report, ok ? "info" : "error")
+  notifyOwners(report, ok ? "info" : "warning")
   return ok
 }
 
@@ -299,7 +304,9 @@ export async function _cmdUninstallTarget(
     }
   }
 
-  ctx.ui.notify(summary.join("\n"), ok ? "info" : "error")
+  const report = summary.join("\n")
+  ctx.ui.notify(report, ok ? "info" : "error")
+  notifyOwners(report, ok ? "info" : "warning")
 }
 
 // ── Agent-network commands (plano 19) ─────────────────────────────────────────

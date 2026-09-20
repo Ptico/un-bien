@@ -60,6 +60,7 @@ import {
 } from "./session/rpc_envelope.js"
 import { dispatchRpcCommand } from "./session/rpc_inbound.js"
 import { envLog } from "./session/debug_log.js"
+import { setOwnerNotifyHook } from "./session/owner_notify.js"
 import { roomIdForSession } from "./rooms.js"
 import { registerAgentTools } from "./session/tools.js"
 import { formatPeerInventory } from "./session/peer_inventory.js"
@@ -693,6 +694,22 @@ function _emitTestBus(channel: string, data: unknown): void {
     /* bus absent — best effort */
   }
 }
+
+// Owner-notify bridge (transient toasts on the app): /unbien command handlers
+// report through notifyOwners() - this broadcasts the notice to every attached
+// owner as extension_ui_request {method:"notify"}, the same shape the ask-flow
+// bridge and the /unbien test ask-notify scenario use, over the same transport.
+setOwnerNotifyHook((message, level) => {
+  _broadcastEnvelope(relayDeps, {
+    rpc: {
+      type: "extension_ui_request",
+      id: `cmd-notify-${Date.now()}`,
+      method: "notify",
+      message,
+      notify_type: level,
+    },
+  })
+})
 
 /** Run one canned UI-test scenario. Returns a short status for the notify. */
 function _runTestScenario(scenario: string): string {
