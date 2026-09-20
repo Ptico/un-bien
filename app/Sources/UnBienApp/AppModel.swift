@@ -175,13 +175,17 @@ public final class AppModel: ObservableObject {
     var pendingSessionLists: [String: (continuation: CheckedContinuation<JSONValue?, Never>, peer: String)] = [:]
     /// Machine-level launch/resume expectations (auto-open the new chat):
     /// registered by `launchOnMachine`, matched + consumed once in
-    /// upsertSession when the launched session's room announces. For RESUME
-    /// the match is deterministic — pi reuses the stored session's id. For a
-    /// NEW launch (no id knowable in advance) the match is snapshot-diff:
-    /// the first NEWLY-announced session id on that machine that we didn't
-    /// know at request time. Expired by a backstop task (60s) if the launch
-    /// failed silently — the stale entry must not hijack a later announce.
+    /// upsertSession when the launched session's room announces. The daemon
+    /// spawns pi with UNBIEN_LAUNCH_REQ = <request id> and the extension
+    /// echoes it in room_meta, so the match is deterministic. Expired by a
+    /// backstop task (60s) if the launch failed silently — the stale entry
+    /// must not hijack a later announce.
     var pendingMachineLaunches: [String: PendingMachineLaunch] = [:]
+    /// Transient notices pushed by machines (slash-command feedback):
+    /// `extension_ui_request {method:"notify"}` frames with no matching open
+    /// ask. Rendered as auto-dismissing toasts (RootView overlay); capped so
+    /// a burst of command output can't stack unbounded.
+    @Published public var transientNotifies: [TransientNotice] = []
 
     // MARK: - Preferences (persisted)
 
@@ -817,6 +821,23 @@ public final class AppModel: ObservableObject {
         Task {
             try? await connection.send(.closeChildRoom(id: rid, roomID: childRoomID),
                                        toPeer: peerEPK, room: parentRoomID)
+        }
+    }
+
+    /// Slash-command feedback: push a machine's transient notice (toast).
+    /// Capped at 3 (a burst of command output must not stack unbounded) and
+    /// auto-expiring after 6s — these are ephemeral signals, never records.
+    public func pushTransientNotice(message: String, level: String) {
+        let notice = TransientNotice(message: message, level: level)
+        withAnimation { transientNotifies.append(notice) }
+        if transientNotifies.count > 3 {
+            transientNotifies.removeFirst(transientNotifies.count - 3)
+        }
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            withAnimation {
+                self?.transientNotifies.removeAll { $0.id == notice.id }
+            }
         }
     }
 

@@ -45,6 +45,9 @@ public struct RootView: View {
                 HomeView()
             }
         }
+        // Transient machine notices (slash-command feedback) — top overlay,
+        // above ANY pushed screen (HomeView's NavigationStack included).
+        .overlay(alignment: .top) { TransientNoticeOverlay() }
         .environmentObject(model)
         .environmentObject(fonts)
         .environment(\.appTheme, model.theme)
@@ -133,5 +136,42 @@ public struct UnBienSceneApp: App {
         .defaultSize(width: 460, height: 760)
         .windowResizability(.contentMinSize)
         #endif
+    }
+}
+
+/// Transient machine notices (slash-command feedback): auto-dismissing toasts
+/// pushed as `extension_ui_request {method:"notify"}` frames carrying the
+/// `cmd-notify-` id prefix. Never persisted; the model caps the stack at 3 and
+/// expires each notice after 6s. Hit-testing disabled — pure signal overlay.
+private struct TransientNoticeOverlay: View {
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        VStack(spacing: 6) {
+            ForEach(model.transientNotifies) { notice in
+                Text(notice.message)
+                    .font(.footnote.weight(.medium))
+                    .lineLimit(3)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(.thinMaterial, in: Capsule())
+                    .overlay(
+                        Capsule().strokeBorder(color(for: notice.level), lineWidth: 1)
+                    )
+                    .shadow(radius: 3, y: 1)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.top, 6)
+        .allowsHitTesting(false)
+    }
+
+    private func color(for level: String) -> Color {
+        switch level {
+        case "error": return .red
+        case "warning": return .orange
+        default: return .accentColor
+        }
     }
 }

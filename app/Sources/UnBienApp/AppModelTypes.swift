@@ -110,6 +110,23 @@ struct PendingMachineLaunch: Sendable {
     var launchReq: String
 }
 
+/// A TRANSIENT notice pushed by a machine (slash-command feedback): rendered
+/// as an auto-dismissing toast, never a transcript entry. Rides the
+/// `extension_ui_request {method:"notify"}` shape the ask-flow already uses.
+public struct TransientNotice: Identifiable, Equatable, Sendable {
+    public let id: UUID
+    public let message: String
+    /// "info" | "warning" | "error" (the daemon's notify_type; unknown → info).
+    public let level: String
+    public let date: Date
+    public init(message: String, level: String) {
+        self.id = UUID()
+        self.message = message
+        self.level = level
+        self.date = Date()
+    }
+}
+
 /// Outcome of asking a machine's daemon for its stored sessions — distinguishes
 /// "none stored" from "the machine refused / never answered", which otherwise
 /// read identically as an empty list (and lied: "No stored sessions" when the

@@ -579,7 +579,16 @@ extension AppModel {
                                         message: request.message ?? request.title ?? "")
                 } else if prompts[key]?.id == request.id {
                     prompts[key] = nil
+                } else if request.id.hasPrefix("cmd-notify-") {
+                    // SLASH-COMMAND FEEDBACK: a standalone notify with the
+                    // command-notify id prefix (never a resolution ack) —
+                    // surface as a transient toast. /unbien install and
+                    // friends report their steps + final summary this way.
+                    pushTransientNotice(
+                        message: request.message ?? request.title ?? "",
+                        level: request.notifyType ?? "info")
                 }
+                // else: pure resolution ack — dropped (row would be noise).
             } else {
                 prompts[key] = request
                 // Ask-reconciliation window: collect this ask id —
