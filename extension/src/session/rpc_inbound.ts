@@ -10,6 +10,7 @@
 // follow_up / abort / set_model / set_thinking_level. get_state / get_entries /
 // compact / bash follow (they need the fuller ctx.sessionManager).
 
+import { notifyOwners } from "./owner_notify.js"
 import type { SessionEntry } from "@earendil-works/pi-coding-agent"
 import type { EnvelopeMessage } from "./rpc_envelope.js"
 
@@ -175,6 +176,11 @@ export interface RpcCommandHandlers {
     message: string,
     opts: { id?: string; images?: unknown; streamingBehavior?: string },
   ): Promise<void>
+  /** Optional: does the session's command registry know this slash token
+   *  (extension command / skill / prompt template)? Implemented by
+   *  createRpcHandlers via pi.getCommands(). Absent => unknown tokens PASS
+   *  to pi (status-quo behavior, no refusal). */
+  isKnownSlash?(token: string): boolean
   steer(message: string, opts: { images?: unknown }): Promise<void>
   followUp(message: string, opts: { images?: unknown }): Promise<void>
   abort(): Promise<void>
@@ -223,6 +229,143 @@ function str(v: unknown): string {
  * envelope. Returns `null` for commands we don't handle yet (ignored —
  * forward-compatible). A handler throw becomes `success:false` with the message.
  */
+// ── TUI built-in slash intercept ────────────────────────────────────────────
+//
+// The pi TUI intercepts its built-in slash commands in interactive-mode
+// BEFORE session.prompt() runs. Remote clients call prompt() directly, so
+// "/compact" etc. used to reach the MODEL as literal text. Remote clients
+// get TUI semantics via this intercept:
+//   - built-ins with session verbs execute (compact/new/name/thinking/model)
+//   - TUI-only built-ins (settings/export/copy/...) toast "not available
+//     remotely" and are NOT sent
+//   - unknown /foo toasts "not a command" and is NOT sent (TUI parity - the
+//     TUI errors on unknown commands too) unless the command registry knows
+//     the token (extension commands, /unbien*, skills, templates pass to pi).
+const TUI_BUILT_IN_WITH_VERB = new Set([
+  "/compact",
+  "/new",
+  "/name",
+  "/thinking",
+  "/model",
+])
+const TUI_ONLY_SLASH = new Set([
+  "/settings", "/scoped-models", "/export", "/import", "/share", "/bug",
+  "/copy", "/session", "/changelog", "/hotkeys", "/tree", "/trust",
+  "/login", "/logout", "/reload", "/debug", "/resume", "/quit", "/fork",
+  "/clone",
+])
+
+/** Returns true when the prompt was CONSUMED by the intercept (executed a
+ *  session verb, or refused as TUI-only/unknown) and must NOT reach
+ *  handlers.prompt. False = pass through to pi (extension commands, skills,
+ *  templates, plain text). */
+export async function interceptTuiBuiltInSlash(
+  text: string,
+  handlers: RpcCommandHandlers,
+): Promise<boolean> {
+  const rawToken = text.trim().split(/\s+/)[0] ?? ""
+  if (!rawToken.startsWith("/") || rawToken.length < 2) return false
+  const token = rawToken.toLowerCase()
+  const arg = text.trim().slice(rawToken.length).trim()
+
+  if (TUI_BUILT_IN_WITH_VERB.has(token)) {
+    try {
+      switch (token) {
+        case "/compact": {
+          if (!handlers.compact) break
+          notifyOwners("Compacting session…", "info")
+          await handlers.compact(arg || undefined)
+          notifyOwners("Session compacted.", "info")
+          return true
+        }
+        case "/new": {
+          if (!handlers.newSession) break
+          await handlers.newSession()
+          notifyOwners("New session started.", "info")
+          return true
+        }
+        case "/name": {
+          if (!arg) {
+            notifyOwners("usage: /name <new name>", "warning")
+            return true
+          }
+          if (!handlers.setSessionName) break
+          await handlers.setSessionName(arg)
+          notifyOwners(`Session renamed to "${arg}".`, "info")
+          return true
+        }
+        case "/thinking": {
+          if (!arg) {
+            notifyOwners(
+              "usage: /thinking <off|minimal|low|medium|high|xhigh> (or use the thinking control)",
+              "warning",
+            )
+            return true
+          }
+          await handlers.setThinkingLevel(arg)
+          notifyOwners(`Thinking set to ${arg}.`, "info")
+          return true
+        }
+        case "/model": {
+          if (!arg) {
+            notifyOwners(
+              "usage: /model <search term> (or use the model picker)",
+              "warning",
+            )
+            return true
+          }
+          if (!handlers.getAvailableModels || !handlers.setModel) break
+          const models = (await handlers.getAvailableModels()) as Array<{
+            id?: string
+            name?: string
+            provider?: string
+          }>
+          const hay = arg.toLowerCase()
+          const matches = (models ?? []).filter((m) =>
+            `${m.name ?? ""} ${m.id ?? ""}`.toLowerCase().includes(hay),
+          )
+          if (matches.length === 1) {
+            const m = matches[0]!
+            await handlers.setModel(m.provider ?? "", m.id ?? "")
+            notifyOwners(`Model set to ${m.name ?? m.id ?? "model"}.`, "info")
+          } else {
+            notifyOwners(
+              matches.length === 0
+                ? `no model matching "${arg}"`
+                : `${matches.length} models match "${arg}" — use the model picker`,
+              "warning",
+            )
+          }
+          return true
+        }
+      }
+    } catch (err) {
+      notifyOwners(
+        `${token} failed: ${err instanceof Error ? err.message : String(err)}`,
+        "error",
+      )
+      return true
+    }
+  }
+
+  if (TUI_ONLY_SLASH.has(token)) {
+    notifyOwners(`${token} is a pi TUI command — not available remotely.`, "warning")
+    return true
+  }
+
+  // Unknown slash: refuse unless the session's registry knows the token
+  // (extension command / skill / template). No registry handler => pass
+  // (status-quo behavior for hosts that can't consult the registry).
+  if (handlers.isKnownSlash?.(rawToken) === false) {
+    notifyOwners(
+      `'${rawToken}' is not a command on this machine — not sent.`,
+      "warning",
+    )
+    return true
+  }
+  return false
+}
+
 export async function dispatchRpcCommand(
   frame: Record<string, unknown>,
   handlers: RpcCommandHandlers,
@@ -232,8 +375,12 @@ export async function dispatchRpcCommand(
   const id = typeof frame.id === "string" ? frame.id : undefined
   try {
     switch (command) {
-      case "prompt":
-        await handlers.prompt(str(frame.message), {
+      case "prompt": {
+        const text = str(frame.message)
+        if (text.startsWith("/") && (await interceptTuiBuiltInSlash(text, handlers))) {
+          return rpcResponse("prompt", id, { success: true })
+        }
+        await handlers.prompt(text, {
           id,
           images: frame.images,
           streamingBehavior:
@@ -242,6 +389,7 @@ export async function dispatchRpcCommand(
               : undefined,
         })
         return rpcResponse("prompt", id, { success: true })
+      }
       case "steer":
         await handlers.steer(str(frame.message), {
           images: frame.images,

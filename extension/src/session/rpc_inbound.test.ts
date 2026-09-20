@@ -294,3 +294,87 @@ describe("dispatchRpcCommand", () => {
     expect(h.prompt).not.toHaveBeenCalled()
   })
 })
+
+describe("TUI built-in slash intercept", () => {
+  it("/compact executes the compact verb and never reaches prompt", async () => {
+    const h = handlers({ compact: vi.fn(async () => ({})) })
+    const resp = await dispatchRpcCommand(
+      { type: "prompt", id: "c", message: "/compact focus on the plan" },
+      h,
+    )
+    expect(h.compact).toHaveBeenCalledWith("focus on the plan")
+    expect(h.prompt).not.toHaveBeenCalled()
+    expect(resp).toEqual({
+      rpc: { type: "response", command: "prompt", success: true, id: "c" },
+    })
+  })
+
+  it("/new executes newSession", async () => {
+    const h = handlers({ newSession: vi.fn(async () => ({ cancelled: false })) })
+    await dispatchRpcCommand({ type: "prompt", id: "n", message: "/new" }, h)
+    expect(h.newSession).toHaveBeenCalled()
+    expect(h.prompt).not.toHaveBeenCalled()
+  })
+
+  it("bare /name and /model without args are consumed as usage toasts", async () => {
+    const h = handlers()
+    await dispatchRpcCommand({ type: "prompt", id: "a", message: "/name" }, h)
+    await dispatchRpcCommand({ type: "prompt", id: "b", message: "/model" }, h)
+    expect(h.prompt).not.toHaveBeenCalled()
+    expect(h.setModel).not.toHaveBeenCalled()
+  })
+
+  it("/settings is TUI-only: consumed, no verb called", async () => {
+    const h = handlers()
+    await dispatchRpcCommand({ type: "prompt", id: "s", message: "/settings" }, h)
+    expect(h.prompt).not.toHaveBeenCalled()
+  })
+
+  it("unknown /foo is refused when isKnownSlash says false", async () => {
+    const h = handlers({ isKnownSlash: () => false })
+    await dispatchRpcCommand({ type: "prompt", id: "u", message: "/foo bar" }, h)
+    expect(h.prompt).not.toHaveBeenCalled()
+  })
+
+  it("unknown /foo passes when isKnownSlash is true (template/skill)", async () => {
+    const h = handlers({ isKnownSlash: () => true })
+    await dispatchRpcCommand({ type: "prompt", id: "t", message: "/deploy prod" }, h)
+    expect(h.prompt).toHaveBeenCalledWith("/deploy prod", expect.anything())
+  })
+
+  it("unknown /foo passes when no isKnownSlash handler (status quo)", async () => {
+    const h = handlers()
+    await dispatchRpcCommand({ type: "prompt", id: "q", message: "/foo" }, h)
+    expect(h.prompt).toHaveBeenCalledWith("/foo", expect.anything())
+  })
+
+  it("/unbien passes through to pi (extension command)", async () => {
+    const h = handlers({ isKnownSlash: () => true })
+    await dispatchRpcCommand({ type: "prompt", id: "ub", message: "/unbien status" }, h)
+    expect(h.prompt).toHaveBeenCalledWith("/unbien status", expect.anything())
+  })
+
+  it("/model <term> with a unique match sets the model", async () => {
+    const h = handlers({
+      getAvailableModels: vi.fn(async () => [
+        { id: "claude-sonnet-4", name: "Claude Sonnet 4", provider: "anthropic" },
+        { id: "gpt-5", name: "GPT-5", provider: "openai" },
+      ]),
+    })
+    await dispatchRpcCommand({ type: "prompt", id: "m", message: "/model sonnet" }, h)
+    expect(h.setModel).toHaveBeenCalledWith("anthropic", "claude-sonnet-4")
+    expect(h.prompt).not.toHaveBeenCalled()
+  })
+
+  it("/model <term> ambiguous consumes with a warning (no set, no send)", async () => {
+    const h = handlers({
+      getAvailableModels: vi.fn(async () => [
+        { id: "a-one", name: "One", provider: "p" },
+        { id: "a-two", name: "Two", provider: "p" },
+      ]),
+    })
+    await dispatchRpcCommand({ type: "prompt", id: "m2", message: "/model a" }, h)
+    expect(h.setModel).not.toHaveBeenCalled()
+    expect(h.prompt).not.toHaveBeenCalled()
+  })
+})

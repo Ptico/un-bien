@@ -223,6 +223,22 @@ export function createRpcHandlers(
     abort: async () => {
       if (!deps.abortCurrentTurn()) throw new Error("no active turn to abort")
     },
+    isKnownSlash: (token) => {
+      // The session's slash registry (extension commands + prompt templates +
+      // skills) via pi.getCommands(). Registry failure => true (assume known;
+      // unknown tokens then keep their status-quo pass-through to pi).
+      try {
+        const commands =
+          (deps.pi as { getCommands?: () => Array<{ name: string }> } | null)
+            ?.getCommands?.() ?? []
+        const bare = token.slice(1)
+        return commands.some(
+          (c) => c.name === bare || c.name.startsWith(bare + " "),
+        )
+      } catch {
+        return true
+      }
+    },
     setModel: async (provider, modelId) => {
       if (!deps.pi) throw new Error("agent session not bound")
       const actionCtx = deps.lastEventCtx as ActionCtx | null
