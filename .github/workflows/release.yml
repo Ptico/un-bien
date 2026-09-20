@@ -1,0 +1,48 @@
+name: Release (@geohar/un-bien)
+
+# Publishes @geohar/un-bien (extension/) to npm on the v* tag via OIDC trusted
+# publishing — no NPM_TOKEN secret. One-time setup at https://www.npmjs.com/ ->
+# package -> Settings -> Trusted Publisher, with:
+#   repository:   georgeharker/un-bien
+#   workflow:     release.yml
+#   environment:  npm
+# Release: cd extension && npm version patch, then git push --follow-tags
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      id-token: write # OIDC: trusted publishing + provenance
+      contents: read
+    defaults:
+      run:
+        working-directory: extension
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          # NB: no registry-url — it writes an .npmrc expecting NODE_AUTH_TOKEN,
+          # which shadows OIDC trusted publishing and makes `npm publish` 404.
+      - name: Upgrade npm (OIDC trusted publishing needs >= 11.5.1)
+        run: npm install -g npm@latest
+      - uses: pnpm/action-setup@v4
+        with:
+          # packageManager (pnpm@X) lives in the ROOT package.json
+          package_json_file: package.json
+      - name: Verify tag matches package version
+        run: |
+          pkg="$(node -p "require('./package.json').version")"
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$pkg" != "$tag" ]; then
+            echo "::error::tag v$tag does not match package version $pkg"
+            exit 1
+          fi
+      - run: pnpm install --frozen-lockfile
+      - name: Publish to npm (trusted publishing + provenance)
+        run: npm publish --provenance --access public
