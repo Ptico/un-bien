@@ -157,3 +157,38 @@ describe("responses carry the ask envelope", () => {
     ).toBe("single")
   })
 })
+
+describe("routeNotify — command-feedback frames (cmd-notify- prefix)", () => {
+  it("info-level cmd-notify renders as a notice (never dropped as an ack)", () => {
+    expect(
+      routeNotify(
+        { id: "cmd-notify-1789", notifyType: "info", message: "Session compacted." },
+        () => false,
+      ),
+    ).toEqual({ kind: "notice", level: "info", text: "Session compacted." })
+  })
+
+  it("error-level cmd-notify renders as a notice", () => {
+    expect(
+      routeNotify(
+        { id: "cmd-notify-1790", notifyType: "error", message: "boom" },
+        () => false,
+      ),
+    ).toEqual({ kind: "notice", level: "error", text: "boom" })
+  })
+
+  it("cmd-notify- never dismisses an open ask even if the id were somehow open", () => {
+    expect(
+      routeNotify(
+        { id: "cmd-notify-1791", notifyType: "info", message: "x" },
+        () => true,
+      ),
+    ).toEqual({ kind: "notice", level: "info", text: "x" })
+  })
+
+  it("non-prefix info with an unshown id still drops (resolution ack)", () => {
+    expect(
+      routeNotify({ id: "flow-1", notifyType: "info", message: "done" }, () => false),
+    ).toEqual({ kind: "drop" })
+  })
+})

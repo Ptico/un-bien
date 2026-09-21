@@ -84,6 +84,10 @@ export function routeNotify(
   const level = String(frame.notifyType ?? "info")
   const text = String(frame.message ?? "")
 
+  // Command-feedback notices (slash-command reports; id prefix "cmd-notify-")
+  // are NEVER resolution acks - always render, whatever the level.
+  if (id?.startsWith("cmd-notify-")) return { kind: "notice", level, text }
+
   // A warning is actionable (answer rejected, flow expired): show it inline and
   // leave any open ask standing as the retry surface.
   if (level === "warning" || level === "error") {

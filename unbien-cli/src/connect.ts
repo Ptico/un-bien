@@ -162,7 +162,7 @@ async function listAllSessions(
           choices.push({ ...room, relayUrl, relayLabel: label })
         }
       }
-      return // explicit: this callback is a Promise.all worker
+      return undefined // explicit: Promise.all worker; array-callback-return wants a value
     }),
   )
 
@@ -894,8 +894,14 @@ async function submit(text: string): Promise<void> {
     return
   }
 
-  if (text.startsWith("/")) emit([`  unknown command: ${text}`])
-  else {
+  // Unknown slash: PASS THROUGH to the machine. The extension's prompt
+  // interceptor provides TUI semantics server-side - pi built-ins with
+  // remote equivalents execute (/compact /new /name /thinking /model),
+  // TUI-only commands and unknown slash refuse with a transient notice
+  // (rendered via handleUiRequest above), and /unbien* / skills / prompt
+  // templates run as registered. Local-first commands were handled above;
+  // everything else is remote - same busy-aware routing as plain text.
+  {
     // BUSY-AWARE ROUTING (matches the app): while the agent is working, a
     // typed prompt STEERS into the running turn (mid-turn injection); when
     // idle, it starts a fresh turn. The user never picks the verb — the

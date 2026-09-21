@@ -164,7 +164,11 @@ export const COMMANDS: Command[] = [
     name: "help",
     summary: "list commands",
     run: (ctx) =>
-      ctx.print(COMMANDS.map((c) => `  /${c.name.padEnd(10)} ${c.summary}`)),
+      ctx.print([
+        ...COMMANDS.map((c) => `  /${c.name.padEnd(10)} ${c.summary}`),
+        `  ${"(other)".padEnd(10)} sent to the machine - pi commands (/compact,`,
+        `  ${"".padEnd(10)} /unbien..., skills, templates) run server-side`,
+      ]),
   },
   {
     name: "plan",
