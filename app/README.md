@@ -86,6 +86,12 @@ Version lives in the generated `App/{iOS,macOS}/Info.plist`
 (`CFBundleShortVersionString` / `CFBundleVersion`); App Store archives go
 through `scripts/archive-appstore.sh` in the repo root.
 
+## Changelog
+
+Release notes per component (App / Extension / Launcher / Relay) live in
+the [changelog](../docs/changelog.md) — rendered on the docs site under
+"Changelog".
+
 ## Diagnostics
 
 The companion daemons log to `~/.local/state/un-bien/` on each machine —

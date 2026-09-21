@@ -9,6 +9,7 @@ project:
     - README.md # README files must be listed explicitly; globs skip them
     - docs/install.md
     - docs/app-guide.md
+    - docs/changelog.md
     - docs/privacy.md
     - extension/README.md
     - extension/docs/daemon.md
@@ -57,6 +58,8 @@ website:
         href: docs/install.md
       - text: "App guide"
         href: docs/app-guide.md
+      - text: "Changelog"
+        href: docs/changelog.md
       - text: "Privacy policy"
         href: docs/privacy.md
       - section: "Extension"

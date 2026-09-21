@@ -1,42 +1,6 @@
-# Changelog — Un Bien
+# Changelog
 
-Notable user-facing changes to the companion app. The app ships
-independently of the npm/relay packages; daemon-side features (resume,
-launch, terminate) additionally require a current launcher daemon /
-extension on the machines.
-
-## 1.2 (build 6)
-
-- **Resume Session** — long-press a machine row and pick a stored pi
-  session to relaunch: recency-ordered list, type-to-filter, sortable by
-  name/message count. The resumed chat auto-opens when it comes live.
-  Requires a launcher daemon advertising `session_resume` (0.1.9+ of the
-  launcher / extension 0.20.5+); the menu item is hidden on older daemons.
-- **New Conversation…** joins the machine long-press menu (previously
-  only the ＋ chip).
-- Launched and resumed conversations **auto-open** when their room comes
-  live — deterministic, via the daemon's launch-correlation echo. A
-  launch that never comes live expires quietly after 60s (the session
-  still appears via normal discovery).
-- Truthful error states in the resume picker: a machine refusal
-  (unpaired / directory gate / lister failure) is shown as such instead
-  of a fake "No stored sessions".
-- **Slash commands in the composer** — text starting with `/` runs as a
-  pi command on the machine (pi built-ins with remote equivalents like
-  `/compact`, `/new`, `/name`, `/thinking`, `/model` execute; unknown
-  commands are refused with a toast instead of reaching the model).
-  Command output arrives as transient toasts.
-- **Transient toasts** — machine-pushed notices render as auto-dismissing,
-  level-colored toasts at the top of the screen (never transcript noise).
-- Fixed: the model picker's open menu could snap back to the top while
-  scrolling when the model roster refreshed (row identity churn); models
-  are keyed by provider+id.
-
-## 1.1 (build 5)
-
-- Initial App Store release ("Un Bien").
-- Relays, QR pairing (`unbien://` deep link), live session transcripts
-  with streaming tool calls / text / thinking, steering and queued
-  follow-ups, tool-call approval, fork / clone / branch, subagent and
-  plan panels, remote rename and terminate, model & thinking pickers,
-  themes, iOS + macOS.
+The Un Bien release notes live in the project docs — see
+[docs/changelog.md](../docs/changelog.md) (rendered on the docs site at
+docs.georgeharker.com/un-bien under **Changelog**, alongside the
+Extension, Launcher, and Relay sections).
