@@ -1,5 +1,6 @@
 import Foundation
 import os
+import SwiftUI
 import UnBienCore
 
 private let log = Logger(subsystem: "un-bien", category: "relay")
@@ -504,5 +505,30 @@ extension AppModel {
         sessions.values.first {
             $0.relayID == relayID && $0.peerEPK == peer && $0.roomID == roomID
         }?.id
+    }
+
+    // MARK: - Transient notices (slash-command feedback; carved from AppModel.swift)
+
+    /// Push a machine's transient notice: SHORT => auto-dismissing toast
+    /// (capped at 3, 6s expiry — ephemeral signals, never records); LONG
+    /// (multi-line command reports) => the output sheet — a 3-line 6-second
+    /// toast is a truncated loss for a 20-line install summary.
+    public func pushTransientNotice(message: String, level: String) {
+        let notice = TransientNotice(message: message, level: level)
+        let lineCount = message.split(separator: "\n", omittingEmptySubsequences: false).count
+        if lineCount > 8 || message.count > 600 {
+            outputSheet = notice
+            return
+        }
+        withAnimation { transientNotifies.append(notice) }
+        if transientNotifies.count > 3 {
+            transientNotifies.removeFirst(transientNotifies.count - 3)
+        }
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            withAnimation {
+                self?.transientNotifies.removeAll { $0.id == notice.id }
+            }
+        }
     }
 }

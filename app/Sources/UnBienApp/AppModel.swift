@@ -183,9 +183,14 @@ public final class AppModel: ObservableObject {
     var pendingMachineLaunches: [String: PendingMachineLaunch] = [:]
     /// Transient notices pushed by machines (slash-command feedback):
     /// `extension_ui_request {method:"notify"}` frames with no matching open
-    /// ask. Rendered as auto-dismissing toasts (RootView overlay); capped so
-    /// a burst of command output can't stack unbounded.
+    /// ask. SHORT notices render as auto-dismissing toasts (RootView
+    /// overlay); LONG output (multi-line command reports) opens the
+    /// output sheet instead — a 3-line 6-second toast is useless for a
+    /// 20-line install summary. Capped so a burst can't stack unbounded.
     @Published public var transientNotifies: [TransientNotice] = []
+    /// The LONG machine notice currently shown in the output sheet
+    /// (monospace, scrollable, copyable). item-based for .sheet(item:).
+    @Published public var outputSheet: TransientNotice?
 
     // MARK: - Preferences (persisted)
 
@@ -822,23 +827,6 @@ public final class AppModel: ObservableObject {
         Task {
             try? await connection.send(.closeChildRoom(id: rid, roomID: childRoomID),
                                        toPeer: peerEPK, room: parentRoomID)
-        }
-    }
-
-    /// Slash-command feedback: push a machine's transient notice (toast).
-    /// Capped at 3 (a burst of command output must not stack unbounded) and
-    /// auto-expiring after 6s — these are ephemeral signals, never records.
-    public func pushTransientNotice(message: String, level: String) {
-        let notice = TransientNotice(message: message, level: level)
-        withAnimation { transientNotifies.append(notice) }
-        if transientNotifies.count > 3 {
-            transientNotifies.removeFirst(transientNotifies.count - 3)
-        }
-        Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 6_000_000_000)
-            withAnimation {
-                self?.transientNotifies.removeAll { $0.id == notice.id }
-            }
         }
     }
 

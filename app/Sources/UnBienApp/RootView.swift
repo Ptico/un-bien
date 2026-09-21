@@ -48,6 +48,10 @@ public struct RootView: View {
         // Transient machine notices (slash-command feedback) — top overlay,
         // above ANY pushed screen (HomeView's NavigationStack included).
         .overlay(alignment: .top) { TransientNoticeOverlay() }
+        // LONG machine notices (slash-command output) — monospace, copyable.
+        .sheet(item: $model.outputSheet) { notice in
+            CommandOutputSheet(notice: notice)
+        }
         .environmentObject(model)
         .environmentObject(fonts)
         .environment(\.appTheme, model.theme)
