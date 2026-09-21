@@ -45,6 +45,17 @@ thinking blocks, and panels (plans, subagents) live.
 - **Rename**, **End Chat…** (graceful remote terminate), subagent
   panels, plan panels.
 
+### Slash commands
+
+Text starting with `/` in the composer runs as a command **on the
+machine** — the same dispatch the pi TUI uses. Built-ins with remote
+equivalents work directly (`/compact`, `/new`, `/name <name>`,
+`/thinking <level>`, `/model <term>`); `/unbien …` commands run as
+registered; machine-local TUI commands (e.g. `/settings`, `/export`)
+and unknown commands are **refused with a toast** rather than silently
+reaching the model. Command output arrives as transient toasts at the
+top of the screen.
+
 ## Capability gating
 
 Features appear only when the machine advertises the matching

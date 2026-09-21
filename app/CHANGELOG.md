@@ -21,6 +21,13 @@ extension on the machines.
 - Truthful error states in the resume picker: a machine refusal
   (unpaired / directory gate / lister failure) is shown as such instead
   of a fake "No stored sessions".
+- **Slash commands in the composer** — text starting with `/` runs as a
+  pi command on the machine (pi built-ins with remote equivalents like
+  `/compact`, `/new`, `/name`, `/thinking`, `/model` execute; unknown
+  commands are refused with a toast instead of reaching the model).
+  Command output arrives as transient toasts.
+- **Transient toasts** — machine-pushed notices render as auto-dismissing,
+  level-colored toasts at the top of the screen (never transcript noise).
 - Fixed: the model picker's open menu could snap back to the top while
   scrolling when the model roster refreshed (row identity churn); models
   are keyed by provider+id.
