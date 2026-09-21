@@ -378,3 +378,30 @@ describe("TUI built-in slash intercept", () => {
     expect(h.prompt).not.toHaveBeenCalled()
   })
 })
+
+describe("TUI built-in slash intercept — absolute-path pass-through", () => {
+  it("path-shaped tokens pass to the model (inner slash)", async () => {
+    const h = handlers({ isKnownSlash: () => false })
+    await dispatchRpcCommand(
+      { type: "prompt", id: "p1", message: "/Users/george/x/refactor.ts please" },
+      h,
+    )
+    expect(h.prompt).toHaveBeenCalledWith(
+      "/Users/george/x/refactor.ts please",
+      expect.anything(),
+    )
+  })
+
+  it("bare known filesystem roots pass (/etc/hosts-style and bare)", async () => {
+    const h = handlers({ isKnownSlash: () => false })
+    await dispatchRpcCommand({ type: "prompt", id: "p2", message: "/etc/hosts" }, h)
+    await dispatchRpcCommand({ type: "prompt", id: "p3", message: "/tmp" }, h)
+    expect(h.prompt).toHaveBeenCalledTimes(2)
+  })
+
+  it("unknown single-word slash is still refused", async () => {
+    const h = handlers({ isKnownSlash: () => false })
+    await dispatchRpcCommand({ type: "prompt", id: "p4", message: "/foo" }, h)
+    expect(h.prompt).not.toHaveBeenCalled()
+  })
+})

@@ -353,6 +353,21 @@ export async function interceptTuiBuiltInSlash(
     return true
   }
 
+  // Absolute-path-looking tokens ("/Users/x/y.ts", "/etc/hosts") are content,
+  // not commands - the TUI lets them through to the model, so we do too.
+  // pi command tokens are single words, so an inner slash or a known
+  // filesystem root means "path" for our purposes.
+  const PATH_ROOTS = [
+    "/users", "/home", "/tmp", "/var", "/private", "/etc", "/opt", "/usr",
+    "/bin", "/sbin", "/volumes", "/system", "/library", "/applications",
+    "/mnt", "/media", "/srv", "/root", "/workspace", "/workspaces", "/dev",
+  ]
+  const lower = token.toLowerCase()
+  const looksLikePath =
+    lower.slice(1).includes("/") ||
+    PATH_ROOTS.some((r) => lower === r || lower.startsWith(r + "/"))
+  if (looksLikePath) return false
+
   // Unknown slash: refuse unless the session's registry knows the token
   // (extension command / skill / template). No registry handler => pass
   // (status-quo behavior for hosts that can't consult the registry).

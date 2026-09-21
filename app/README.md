@@ -53,7 +53,8 @@ equivalents work directly (`/compact`, `/new`, `/name <name>`,
 `/thinking <level>`, `/model <term>`); `/unbien …` commands run as
 registered; machine-local TUI commands (e.g. `/settings`, `/export`)
 and unknown commands are **refused with a toast** rather than silently
-reaching the model. Command output arrives as transient toasts at the
+reaching the model. Absolute paths (`/Users/…`, `/etc/hosts`) are
+recognised as content and sent to the model normally. Command output arrives as transient toasts at the
 top of the screen.
 
 ## Capability gating
