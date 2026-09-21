@@ -60,7 +60,7 @@ import {
 } from "./session/rpc_envelope.js"
 import { dispatchRpcCommand } from "./session/rpc_inbound.js"
 import { envLog } from "./session/debug_log.js"
-import { setOwnerNotifyHook } from "./session/owner_notify.js"
+import { chainUiNotify, notifyOwners, setOwnerNotifyHook } from "./session/owner_notify.js"
 import { roomIdForSession } from "./rooms.js"
 import { registerAgentTools } from "./session/tools.js"
 import { formatPeerInventory } from "./session/peer_inventory.js"
@@ -2507,6 +2507,7 @@ const extension: ExtensionFactory = (pi: ExtensionAPI): void => {
               "ui" | "cwd"
             >)
           : ctx
+        chainUiNotify(ctx.ui, notifyOwners)
         void _cmdRoot(deps, initCtx)
       }
     }

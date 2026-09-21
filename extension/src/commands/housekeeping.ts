@@ -29,7 +29,6 @@ import {
   saveLocalConfig,
 } from "../session/local_config.js"
 import { skillsDir } from "../session/global_config.js"
-import { notifyOwners } from "../session/owner_notify.js"
 import { spawnSync } from "node:child_process"
 import {
   copyFileSync,
@@ -63,7 +62,7 @@ import { fileURLToPath } from "node:url"
  *  replaces toasts as they arrive, so per-step messages were wiping each
  *  other out — only the last toast stayed visible (the "all" run looked like
  *  it only installed the relay). */
-export function installLauncherSections(
+function installLauncherSections(
   opts: { linkCli?: boolean } = {},
 ): { ok: boolean; sections: string[] } {
   const linkCli = opts.linkCli ?? false
@@ -118,7 +117,7 @@ export function _cmdInstall(
 }
 
 /** Launcher-daemon uninstall WITHOUT notifying — see installLauncherSections. */
-export function uninstallLauncherSections(opts: {
+function uninstallLauncherSections(opts: {
   linkCli?: boolean
 } = {}): { sections: string[] } {
   const linkCli = opts.linkCli ?? false
@@ -237,7 +236,11 @@ export async function _cmdInstallTarget(
           `[un-bien] Relay service installed (${r.platform}).`,
           `  Unit: ${r.unitPath}`,
           `  Binary: ${r.binary}`,
-          `  Port: ${r.port} (ws://<host>:${r.port})`,
+          // Display hint for the app's Add-Relay sheet — NOT a connection.
+          // The scheme prefix (plain ws, no TLS) is shown by the sheet's
+          // placeholder; the plain-ws posture is a documented design decision
+          // (APPSTORE.md ATS notes: user-configured LAN/Tailnet endpoints).
+          `  Port: ${r.port} — add the relay in the app (plain WebSocket, host:port; no TLS by design)`,
         )
       } else if (component === "cli") {
         const r = await installCliPackage((l) =>
@@ -256,9 +259,9 @@ export async function _cmdInstallTarget(
   // The DURABLE report — last toast standing locally, and broadcast to
   // attached app owners as a transient toast (slash commands run remotely:
   // this is their only feedback surface).
-  const report = summary.join("\n")
-  ctx.ui.notify(report, ok ? "info" : "error")
-  notifyOwners(report, ok ? "info" : "warning")
+  // ctx.ui.notify is CHAINED (session_start) to broadcast to attached app
+  // owners - one call renders locally AND toasts remotely.
+  ctx.ui.notify(summary.join("\n"), ok ? "info" : "error")
   return ok
 }
 
@@ -304,9 +307,7 @@ export async function _cmdUninstallTarget(
     }
   }
 
-  const report = summary.join("\n")
-  ctx.ui.notify(report, ok ? "info" : "error")
-  notifyOwners(report, ok ? "info" : "warning")
+  ctx.ui.notify(summary.join("\n"), ok ? "info" : "error")
 }
 
 // ── Agent-network commands (plano 19) ─────────────────────────────────────────
