@@ -51,6 +51,11 @@ export function entriesToEnvelopes(entries: readonly unknown[]) {
     if (!entry || entry.type !== "message") continue
     const message = asFrame(entry.message)
     if (!message) continue
+    // pi's internal system-prompt record (role "system", string `content` +
+    // `sections`) is STATE, not transcript content. Rendering it crashes
+    // AssistantMessageComponent (content.some on a string) — and the TUI
+    // never renders it either.
+    if (message.role === "system") continue
 
     if (message.role === "toolResult") {
       out.push({

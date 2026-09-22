@@ -97,6 +97,9 @@ export function renderTranscript(
 
     if (item.kind === "message") {
       const { message } = item
+      // Defensive: system entries are state (see reduce.ts); anything without
+      // array content (legacy/foreign shapes) is not renderable here.
+      if (message.role === "system" || !Array.isArray(message.content)) continue
       if (message.role === "user") {
         const text = message.content
           .filter((b) => b.type === "text")
