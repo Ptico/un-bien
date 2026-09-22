@@ -7,7 +7,10 @@
  * index.ts carve-up); the only edits are the `deps.` threading of
  * index.ts module state/helpers.
  */
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+} from "@earendil-works/pi-coding-agent"
 import type { CommandDeps } from "./deps.js"
 import {
   _cmdConfig,
@@ -87,6 +90,7 @@ export function registerUnbienCommands(
         "cron log",
         "install",
         "uninstall", // service install (plan/26 W3)
+        "stop", // abort turn + cancel pending asks
         // Internal session ops (self-dispatched from the app's structured
         // session_fork / session_navigate / new_session frames).
         "fork",
@@ -131,6 +135,8 @@ export function registerUnbienCommands(
         await deps.renameAgent(sub.slice("rename".length).trim())
       } else if (sub === "peers") {
         await _cmdPeers(deps, ctx)
+      } else if (sub === "stop" || sub.startsWith("stop ")) {
+        await stopHandler(sub.slice(4).trim(), ctx)
       } else if (sub === "install" || sub.startsWith("install ")) {
         // The ROOT command is what the TUI actually routes /unbien install
         // through (the nested "unbien install" registration only serves the
@@ -169,6 +175,40 @@ export function registerUnbienCommands(
   // Nested registrations (one entry per public action). The flat handler
   // above already routes `/unbien <sub>` — these exist for the SDK's
   // command palette and slash-autocomplete in some UI modes.
+  /** /stop — the universal abort: agent turn + pending asks. Runs from any
+   *  client (TUI, phone composer, CLI) and reports via the chained notify
+   *  (toast everywhere). TUI-rendered raw ctx.ui dialogs are NOT reachable
+   *  — they await their host's local input by design. */
+  const stopHandler = async (args: string, ctx: ExtensionContext) => {
+    void args
+    const lines: string[] = []
+    try {
+      const aborted = deps.abortCurrentTurn()
+      lines.push(aborted ? "Agent turn aborted." : "No active agent turn.")
+    } catch (err) {
+      lines.push(`abort failed: ${String(err)}`)
+    }
+    try {
+      const cancelled = deps.cancelPendingAsks()
+      lines.push(
+        cancelled > 0
+          ? `${cancelled} pending ask${cancelled === 1 ? "" : "s"} cancelled.`
+          : "No pending asks.",
+      )
+    } catch (err) {
+      lines.push(`ask cancellation failed: ${String(err)}`)
+    }
+    ctx.ui.notify(lines.join("\n"), "info")
+  }
+  pi.registerCommand("stop", {
+    description: "Abort the current turn and cancel pending asks",
+    handler: stopHandler,
+  })
+  pi.registerCommand("unbien stop", {
+    description: "Alias of /stop",
+    handler: stopHandler,
+  })
+
   pi.registerCommand("unbien setup", {
     description: "Run the setup wizard and update local config",
     handler: async (_, ctx) => {

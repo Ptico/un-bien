@@ -58,6 +58,12 @@ export interface CommandDeps {
   currentModel: string | undefined
   /** Last-known thinking level (root session projection). */
   currentThinking: ThinkingLevel | undefined
+  /** Abort the current agent turn (pi AgentSession.abort via the last event
+   *  ctx). Returns false when nothing is running. */
+  abortCurrentTurn(): boolean
+  /** Cancel every pending pi-ask flow (bridge-managed asks). Returns the
+   *  count cancelled. TUI-rendered raw ctx.ui dialogs are not reachable. */
+  cancelPendingAsks(): number
   /** THE App↔Pi room id for the current chat session. */
   myRoomId: string | null
   /** Room meta hello payload persisted for reconnect replay. */

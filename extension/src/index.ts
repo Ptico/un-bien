@@ -1787,6 +1787,8 @@ const deps: CommandDeps = {
   get currentThinking() {
     return _currentThinking
   },
+  abortCurrentTurn: () => _abortCurrentTurn(),
+  cancelPendingAsks: () => _extensionUiBridge?.cancelAllPending() ?? 0,
   set currentThinking(v) {
     _currentThinking = v
   },

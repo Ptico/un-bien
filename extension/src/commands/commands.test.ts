@@ -96,8 +96,9 @@ describe("extension default export", () => {
     // 8 plan-25 + 2 install + 1 cross-PC inventory (plan-25 W D)
     // + 1 rename (plan/41) + 1 relay control (issue #119)
     // + 2 identity (`unbien identity` and its `identity show` verb alias)
-    // + 1 config + 3 internal session ops (fork/branch/new).
-    expect(registeredCommands).toHaveLength(19)
+    // + 1 config + 3 internal session ops (fork/branch/new)
+    // + 2 stop (`/stop` + the `unbien stop` alias) - universal abort.
+    expect(registeredCommands).toHaveLength(21)
     // Internal session ops — self-dispatched from the app's structured
     // session_fork / session_navigate / new_session frames (ctx.fork /
     // ctx.navigateTree / ctx.newSession are command-ctx-only).
@@ -109,6 +110,8 @@ describe("extension default export", () => {
     // without it every `/unbien relay …` silently reprinted the status panel.
     expect(registeredCommands).toContain("unbien relay")
     expect(registeredCommands).toContain("unbien config")
+    expect(registeredCommands).toContain("stop")
+    expect(registeredCommands).toContain("unbien stop")
     for (const removed of [
       "unbien join",
       "un-bien leave",

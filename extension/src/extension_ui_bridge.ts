@@ -66,6 +66,12 @@ export interface ExtensionUiBridge {
    * closed.
    */
   pendingRequests(): ServerMessage[]
+  /** Cancel EVERY pending flow (slash-command feedback: /stop). Emits a
+   *  cancelled response per flow, resolving the awaiting extension side and
+   *  dropping it from activeFlows. Returns the count cancelled. TUI-rendered
+   *  raw ctx.ui.select dialogs are NOT reachable (they never entered the
+   *  bridge) — those remain host-side awaits. */
+  cancelAllPending(): number
   /** Drop all subscriptions + state (best-effort teardown). */
   dispose(): void
 }
@@ -287,6 +293,25 @@ export function createExtensionUiBridge(
     // than one renders them oldest-first. pi-ask resolves one flow at a time in
     // practice, so this is a defensive detail rather than a live case.
     pendingRequests: () => [...activeFlows.values()].map(requestForFlow),
+
+    /** Cancel EVERY pending flow (slash-command feedback: /stop). Emits a
+     *  cancelled response per flow, which resolves the awaiting extension
+     *  side (its `if (!picked) return` path) and drops it from
+     *  activeFlows. Returns the count cancelled. TUI-rendered raw
+     *  ctx.ui.select dialogs are NOT reachable here (they never entered
+     *  the bridge) — those remain host-side awaits. */
+    cancelAllPending(): number {
+      let n = 0
+      for (const flowId of [...activeFlows.keys()]) {
+        try {
+          respond({ type: "extension_ui_response", cancelled: true, id: flowId })
+          n++
+        } catch {
+          /* best-effort per flow */
+        }
+      }
+      return n
+    },
     dispose() {
       unsubStarted()
       unsubCompleted()
