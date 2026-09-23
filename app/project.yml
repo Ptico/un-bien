@@ -99,6 +99,32 @@ targets:
         Debug:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) DEBUG UNBIEN_DIAGNOSTICS
 
+  # Keychain regression suite (issue #2) run INSIDE the app's entitlement:
+  # an unsigned `swift test` CLI process has no data-protection-keychain
+  # entitlement, so the SPM test bundle can only SKIP those tests there
+  # (see tryRequireDPKeychain). Hosting the same test file in the app's
+  # test host on the simulator gives the REAL proof — save() → restart →
+  # load() must round-trip. Run: xcodebuild test -scheme UnBien-iOS
+  # -only-testing:UnBienCoreTestsHost -destination '<simulator>'
+  UnBienCoreTestsHost:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - Tests/UnBienCoreTests/KeychainOwnerIdentityStoreTests.swift
+    dependencies:
+      - target: UnBien-iOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.georgeharker.un-bien.app.tests
+        GENERATE_INFOPLIST_FILE: "YES"
+        SWIFT_VERSION: "6.0"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: B8V3694RNX
+        # PRODUCT_NAME is "Un Bien" (with a space) — the auto TEST_HOST
+        # resolves the module name, so pin the host path explicitly.
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Un Bien.app/Un Bien
+        BUNDLE_LOADER: $(TEST_HOST)
+
   UnBien-macOS:
     type: application
     platform: macOS
@@ -158,3 +184,12 @@ targets:
       configs:
         Debug:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) DEBUG UNBIEN_DIAGNOSTICS
+
+schemes:
+  UnBien-iOS:
+    build:
+      targets:
+        UnBien-iOS: all
+    test:
+      targets:
+        - UnBienCoreTestsHost

@@ -25,6 +25,7 @@
 		7AA0825A15CABCC67316911C /* remote-pi.txt in Resources */ = {isa = PBXBuildFile; fileRef = 8352D479ACDF777CE3E04C20 /* remote-pi.txt */; };
 		89A02EC256059EC4F4566456 /* un-bien.txt in Resources */ = {isa = PBXBuildFile; fileRef = AAE1F01866472F0EDD3C2634 /* un-bien.txt */; };
 		958EE8CD05A8B6ACDF732B51 /* UnBienApp in Frameworks */ = {isa = PBXBuildFile; productRef = 59C154A563AD5B08B3955A71 /* UnBienApp */; };
+		A1DCF4723E37F7D1B01AAA68 /* KeychainOwnerIdentityStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F0D1469174925331035823D /* KeychainOwnerIdentityStoreTests.swift */; };
 		A461F8BE862D9B7D20020A89 /* networkimage.txt in Resources */ = {isa = PBXBuildFile; fileRef = A6AFBFC012B80E09058AB87C /* networkimage.txt */; };
 		AB2464C83ABFF8420774BCB1 /* swift-markdown-ui.txt in Resources */ = {isa = PBXBuildFile; fileRef = 678ED531F6610CB64E22241E /* swift-markdown-ui.txt */; };
 		B1F92F492B7E24E319E5CC04 /* demo-subagent-run.jsonl in Resources */ = {isa = PBXBuildFile; fileRef = 0A69500B0FF76C79403CBE21 /* demo-subagent-run.jsonl */; };
@@ -39,6 +40,16 @@
 		DB31BEE90348CA3EB9B9A27B /* demo-main.jsonl in Resources */ = {isa = PBXBuildFile; fileRef = D69E080047C661D47CD1FD70 /* demo-main.jsonl */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		85700A9E390ACDECE095AF43 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8FD23B7F60E46FB4BB9DAA0F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 12D68B4C94A4328EFECB2B7F;
+			remoteInfo = "UnBien-iOS";
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		044E789A3168E6A923FB0425 /* demo-ask.jsonl */ = {isa = PBXFileReference; path = "demo-ask.jsonl"; sourceTree = "<group>"; };
 		05C112673CDC32F4C230FA6D /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -48,9 +59,11 @@
 		20C12F29833F76BE5B0E4F9A /* highlightr.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = highlightr.txt; sourceTree = "<group>"; };
 		363F503535BEAFD31CBD4424 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		5428C98EC37464E839193C6F /* demo-stress.jsonl */ = {isa = PBXFileReference; path = "demo-stress.jsonl"; sourceTree = "<group>"; };
+		5C56473B37D7A7978B0C7FFD /* UnBienCoreTestsHost.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = UnBienCoreTestsHost.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		678ED531F6610CB64E22241E /* swift-markdown-ui.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "swift-markdown-ui.txt"; sourceTree = "<group>"; };
 		6B7387809B0629FB48DB4E9F /* highlightjs.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = highlightjs.txt; sourceTree = "<group>"; };
 		7A34C497832570683B1E6030 /* UnBien-iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "UnBien-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		7F0D1469174925331035823D /* KeychainOwnerIdentityStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainOwnerIdentityStoreTests.swift; sourceTree = "<group>"; };
 		8352D479ACDF777CE3E04C20 /* remote-pi.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "remote-pi.txt"; sourceTree = "<group>"; };
 		8396EB27D83717DD0B5B6F8D /* cmark.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = cmark.txt; sourceTree = "<group>"; };
 		A6AFBFC012B80E09058AB87C /* networkimage.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = networkimage.txt; sourceTree = "<group>"; };
@@ -84,8 +97,17 @@
 			children = (
 				7A34C497832570683B1E6030 /* UnBien-iOS.app */,
 				1D913B5BB0A3D0C3C487F6F1 /* UnBien-macOS.app */,
+				5C56473B37D7A7978B0C7FFD /* UnBienCoreTestsHost.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		44781809DA02EC15078BC67F /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				AB97F07E6948B996D8057FB8 /* UnBienCoreTests */,
+			);
+			path = Tests;
 			sourceTree = "<group>";
 		};
 		6A8BC5B0AFC173F058C15177 = {
@@ -93,6 +115,7 @@
 			children = (
 				A362CD6EA66156BDCDE841E2 /* App */,
 				BD1A989A92C4F7A4C446DB04 /* Packages */,
+				44781809DA02EC15078BC67F /* Tests */,
 				1F3C6FAA2FBB0896BB52C703 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -115,6 +138,14 @@
 				8BF9488FCCFF04717F0856DB /* Shared */,
 			);
 			path = App;
+			sourceTree = "<group>";
+		};
+		AB97F07E6948B996D8057FB8 /* UnBienCoreTests */ = {
+			isa = PBXGroup;
+			children = (
+				7F0D1469174925331035823D /* KeychainOwnerIdentityStoreTests.swift */,
+			);
+			path = UnBienCoreTests;
 			sourceTree = "<group>";
 		};
 		B13939CA2B7D4F10BDEECD99 /* DemoFixtures */ = {
@@ -193,6 +224,24 @@
 			productReference = 1D913B5BB0A3D0C3C487F6F1 /* UnBien-macOS.app */;
 			productType = "com.apple.product-type.application";
 		};
+		EC371DEEF2BA153A1D71C71B /* UnBienCoreTestsHost */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5E697734297A044A05CEE726 /* Build configuration list for PBXNativeTarget "UnBienCoreTestsHost" */;
+			buildPhases = (
+				832A9E11325C8E26F16BEAF9 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				9B129EDB2BE471ED798B57DF /* PBXTargetDependency */,
+			);
+			name = UnBienCoreTestsHost;
+			packageProductDependencies = (
+			);
+			productName = UnBienCoreTestsHost;
+			productReference = 5C56473B37D7A7978B0C7FFD /* UnBienCoreTestsHost.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -207,6 +256,10 @@
 						ProvisioningStyle = Automatic;
 					};
 					B1A9D933CD78586D168C5963 = {
+						DevelopmentTeam = B8V3694RNX;
+						ProvisioningStyle = Automatic;
+					};
+					EC371DEEF2BA153A1D71C71B = {
 						DevelopmentTeam = B8V3694RNX;
 						ProvisioningStyle = Automatic;
 					};
@@ -230,6 +283,7 @@
 			projectRoot = "";
 			targets = (
 				12D68B4C94A4328EFECB2B7F /* UnBien-iOS */,
+				EC371DEEF2BA153A1D71C71B /* UnBienCoreTestsHost */,
 				B1A9D933CD78586D168C5963 /* UnBien-macOS */,
 			);
 		};
@@ -279,6 +333,14 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		832A9E11325C8E26F16BEAF9 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1DCF4723E37F7D1B01AAA68 /* KeychainOwnerIdentityStoreTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9087EB7CDC4F6D14D8BFA4DB /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -296,6 +358,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		9B129EDB2BE471ED798B57DF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 12D68B4C94A4328EFECB2B7F /* UnBien-iOS */;
+			targetProxy = 85700A9E390ACDECE095AF43 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		7DBD83F9A734C09D7D5F4A81 /* Debug */ = {
@@ -441,6 +511,26 @@
 			};
 			name = Debug;
 		};
+		A2250C4F714194032DF45A09 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = B8V3694RNX;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.georgeharker.un-bien.app.tests";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Un Bien.app/Un Bien";
+			};
+			name = Debug;
+		};
 		AAB48626A7106B8EEC0DC93E /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -488,6 +578,26 @@
 			};
 			name = Debug;
 		};
+		B90D2CA4E32D8F3143824071 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = B8V3694RNX;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.georgeharker.un-bien.app.tests";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Un Bien.app/Un Bien";
+			};
+			name = Release;
+		};
 		FEFBBDC4BA6609D506045648 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -514,6 +624,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		5E697734297A044A05CEE726 /* Build configuration list for PBXNativeTarget "UnBienCoreTestsHost" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A2250C4F714194032DF45A09 /* Debug */,
+				B90D2CA4E32D8F3143824071 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		A96C46010905B0481E9C318F /* Build configuration list for PBXNativeTarget "UnBien-iOS" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

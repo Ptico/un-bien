@@ -37,14 +37,20 @@ public final class KeychainOwnerIdentityStore: OwnerIdentityStore, @unchecked Se
     private let account: String
     private let legacyAccount: String?
     private let syncsToICloud: Bool
+    /// Sim-only belt-and-braces seed file. Tests disable this so the REAL
+    /// keychain is exercised (the file would mask keychain regressions —
+    /// including issue #2 itself, which it hid for two weeks).
+    private let simFallback: Bool
 
     public init(service: String = "com.georgeharker.un-bien.owner-key",
                 account: String = "owner",
                 legacyAccount: String? = nil,
+                simFallback: Bool = true,
                 syncsToICloud: Bool) {
         self.service = service
         self.account = account
         self.legacyAccount = legacyAccount
+        self.simFallback = simFallback
         self.syncsToICloud = syncsToICloud
     }
 
@@ -73,7 +79,7 @@ public final class KeychainOwnerIdentityStore: OwnerIdentityStore, @unchecked Se
         // next launch's read is errSecItemNotFound). With the upsert fix the
         // sim keychain should persist; this file is now redundant belt-and-
         // braces for the dev loop. Kept sim-only; never compiled for device.
-        if let blob = simFileBlob(), let id = try? OwnerIdentityBlob.decode(blob) {
+        if simFallback, let blob = simFileBlob(), let id = try? OwnerIdentityBlob.decode(blob) {
             log.info("load: SIMULATOR file fallback hit — returning identity (keychain was not consulted)")
             return id
         }
@@ -122,8 +128,10 @@ public final class KeychainOwnerIdentityStore: OwnerIdentityStore, @unchecked Se
         log.info("\(msg, privacy: .public)")
         let blob = OwnerIdentityBlob.encode(identity)
         #if targetEnvironment(simulator)
-        try? writeSimFile(blob) // sim-only durable fallback (see load())
-        log.info("save: SIMULATOR file fallback written (device builds rely on the keychain alone)")
+        if simFallback {
+            try? writeSimFile(blob) // sim-only durable fallback (see load())
+            log.info("save: SIMULATOR file fallback written (device builds rely on the keychain alone)")
+        }
         #endif
         // UPSERT, never delete-then-add (fix for issue #2): the old save()
         // removed items around the inserts — and on iOS `dataProtection: false`
@@ -164,7 +172,7 @@ public final class KeychainOwnerIdentityStore: OwnerIdentityStore, @unchecked Se
         try remove(account: account, dataProtection: false, synchronizable: nil)
         #endif
         #if targetEnvironment(simulator)
-        if let url = simFileURL { try? FileManager.default.removeItem(at: url) }
+        if simFallback, let url = simFileURL { try? FileManager.default.removeItem(at: url) }
         #endif
     }
 
