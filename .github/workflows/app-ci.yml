@@ -1,0 +1,71 @@
+name: App CI
+
+"on":
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - ".github/workflows/app-ci.yml"
+  pull_request:
+    paths:
+      - "app/**"
+      - ".github/workflows/app-ci.yml"
+
+concurrency:
+  group: app-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Full SPM suite (fast). NOTE: the unsigned CLI test process has no
+  # data-protection-keychain entitlement, so the KeychainOwnerIdentityStore
+  # persistence tests SKIP here (by design — see tryRequireDPKeychain).
+  # The REAL keychain proof runs in the keychain-persistence job below.
+  spm-tests:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Swift test (SPM suite)
+        working-directory: app
+        run: swift test
+
+  # The issue #2 regression suite, run INSIDE the app's test host on the
+  # iOS simulator — the only place the real (entitled) keychain is
+  # reachable in CI. Simulates fresh install -> pair -> restart at the
+  # keychain layer; fails if save() ever leaves the slot empty.
+  keychain-persistence:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache DerivedData
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData
+          key: xcode-deriveddata-${{ runner.os }}-${{ hashFiles('app/Package.resolved') }}
+
+      - name: Keychain persistence tests (simulator, real keychain)
+        working-directory: app
+        run: |
+          set -o pipefail
+          # Simulator names drift between runner images — try in order.
+          for dest in \
+            "platform=iOS Simulator,name=iPhone 17,OS=latest" \
+            "platform=iOS Simulator,name=iPhone 16,OS=latest" \
+            "platform=iOS Simulator,name=iPhone 15,OS=latest"; do
+            echo "==> trying destination: $dest"
+            if xcodebuild test \
+                -scheme UnBien-iOS \
+                -destination "$dest" \
+                -only-testing:UnBienCoreTestsHost \
+                2>&1 | xcbeautify -q; then
+              echo "==> PASSED on $dest"
+              exit 0
+            fi
+            echo "==> failed on $dest, trying next"
+          done
+          echo "ERROR: no working simulator destination"
+          exit 1
