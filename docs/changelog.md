@@ -6,6 +6,18 @@ requirements where they matter.
 
 ## App
 
+### 1.3 (build 7, 2026-09-22)
+
+- **Fixed: owner key wiped on every restart (first reported issue #2)** —
+  `save()` was delete-then-add, and on iOS the trailing "legacy keychain
+  cleanup" hit the same (only) keychain and deleted the key it had just
+  written. Fresh installs re-paired on every app restart; the iCloud-sync
+  toggle also dropped the pairing on macOS. `save()` is now an in-place
+  upsert (the keychain is never empty between writes, and a crash mid-save
+  can no longer lose the identity); legacy-keychain contact is a macOS-only
+  one-time migration in `load()`; the iCloud toggle adds/removes only the
+  synced copy, keeping the device-local copy as the durable anchor.
+
 ### 1.2 (build 6, 2026-09-20)
 
 - **Resume Session** — long-press a machine row and pick a stored pi
