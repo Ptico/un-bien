@@ -3,13 +3,12 @@ name: App CI
 "on":
   push:
     branches: [main]
-    paths:
-      - "app/**"
-      - ".github/workflows/app-ci.yml"
   pull_request:
-    paths:
-      - "app/**"
-      - ".github/workflows/app-ci.yml"
+    branches: [main]
+
+# NOTE: no "paths" filter — required status checks must REPORT on every
+# PR, or a relay-/docs-only PR would block forever on "expected" checks
+# that never run (branch protection requires these two jobs).
 
 concurrency:
   group: app-ci-${{ github.ref }}
