@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import os
 
 /// Keychain-backed Owner-key custody (DESIGN §5).
 ///
@@ -26,6 +27,11 @@ public final class KeychainOwnerIdentityStore: OwnerIdentityStore, @unchecked Se
         /// data-protection keychain is unavailable, use the legacy one.
         case missingEntitlement
     }
+
+    /// DIAGNOSTICS (issue #2): one line per keychain operation with the exact
+    /// OSStatus, so a failed toggle/save dance can be replayed in Console.
+    /// NEVER logs blob/key material — statuses and slot names only.
+    private let log = Logger(subsystem: "un-bien", category: "keychain")
 
     private let service: String
     private let account: String
@@ -59,22 +65,35 @@ public final class KeychainOwnerIdentityStore: OwnerIdentityStore, @unchecked Se
 
     public func load() throws -> Ed25519Identity? {
         #if targetEnvironment(simulator)
-        // The iOS SIMULATOR keychain does NOT persist across relaunch: the write
-        // reports success but the next launch's read is errSecItemNotFound even
-        // with protected data available (confirmed empirically). Back the seed
-        // with a 0600 file in the app container on the SIMULATOR ONLY so the dev
-        // rebuild loop keeps one identity. Compiled out of device/App-Store
-        // builds entirely — real devices use the keychain, which persists there.
-        if let blob = simFileBlob(), let id = try? OwnerIdentityBlob.decode(blob) { return id }
+        // SIMULATOR-ONLY file-backed seed. The original rationale was "the sim
+        // keychain does not persist across relaunch (confirmed empirically)"
+        // — but that observation predates issue #2 and is almost certainly a
+        // MISDIAGNOSIS of save()'s self-wiping delete-then-add (see the save()
+        // comment: write succeeds, then the "legacy cleanup" remove deletes it,
+        // next launch's read is errSecItemNotFound). With the upsert fix the
+        // sim keychain should persist; this file is now redundant belt-and-
+        // braces for the dev loop. Kept sim-only; never compiled for device.
+        if let blob = simFileBlob(), let id = try? OwnerIdentityBlob.decode(blob) {
+            log.info("load: SIMULATOR file fallback hit — returning identity (keychain was not consulted)")
+            return id
+        }
         #endif
         // 1) Per-device account in the data-protection keychain (steady state).
-        if let identity = try read(account: account, dataProtection: true) { return identity }
+        if let identity = try read(account: account, dataProtection: true) {
+            log.info("load: per-device DP hit — returning existing identity")
+            return identity
+        }
+        #if os(macOS)
         // 2) Per-device account in the LEGACY macOS per-binary keychain —
         //    migrate it UP into the data-protection keychain, drop the old copy.
+        //    macOS ONLY (issue #2): on iOS `dataProtection: false` hits the
+        //    same single keychain, so this path is meaningless there — and
+        //    touching the "legacy" store from iOS is what destroyed keys.
         if let legacy = try read(account: account, dataProtection: false) {
-            try? insert(blob: OwnerIdentityBlob.encode(legacy), account: account,
+            log.info("load: LEGACY per-device hit — migrating up into DP keychain")
+            try? upsert(blob: OwnerIdentityBlob.encode(legacy), account: account,
                         synchronizable: syncsToICloud, dataProtection: true)
-            try? remove(account: account, dataProtection: false)
+            try? remove(account: account, dataProtection: false, synchronizable: nil)
             return legacy
         }
         // 3) MIGRATION from the SHARED legacy account (the pre-per-device
@@ -85,41 +104,65 @@ public final class KeychainOwnerIdentityStore: OwnerIdentityStore, @unchecked Se
         if let legacyAccount {
             for dataProtection in [true, false] {
                 if let shared = try read(account: legacyAccount, dataProtection: dataProtection) {
-                    try? insert(blob: OwnerIdentityBlob.encode(shared), account: account,
+                    let slot = dataProtection ? "dp" : "legacy"
+                    log.info("load: shared legacy hit (\(slot, privacy: .public)) — copying into per-device slot")
+                    try? upsert(blob: OwnerIdentityBlob.encode(shared), account: account,
                                 synchronizable: syncsToICloud, dataProtection: true)
                     return shared
                 }
             }
         }
+        #endif
+        log.info("load: MISS — caller will onboard/re-key (unexpected if paired; issue #2)")
         return nil
     }
 
     public func save(_ identity: Ed25519Identity) throws {
+        let msg = "save: begin acct=\(account) syncsToICloud=\(syncsToICloud ? 1 : 0)"
+        log.info("\(msg, privacy: .public)")
         let blob = OwnerIdentityBlob.encode(identity)
         #if targetEnvironment(simulator)
         try? writeSimFile(blob) // sim-only durable fallback (see load())
+        log.info("save: SIMULATOR file fallback written (device builds rely on the keychain alone)")
         #endif
-        // Prefer the data-protection keychain; fall back to legacy only when the
-        // app has no keychain entitlement (unsigned dev build).
+        // UPSERT, never delete-then-add (fix for issue #2): the old save()
+        // removed items around the inserts — and on iOS `dataProtection: false`
+        // is the SAME (only) keychain, so the trailing "legacy cleanup" deleted
+        // the items just written on EVERY save (macOS too: a delete query
+        // without the DP flag matched the fresh DP items). Update-in-place
+        // keeps the keychain populated at every instant, so a crash or
+        // foreground-kill mid-save can no longer lose the identity. The legacy
+        // keychain is NEVER touched here; migration is load()'s macOS-only job.
         do {
-            try remove(account: account, dataProtection: true)
-            try insert(blob: blob, account: account, synchronizable: false, dataProtection: true)
+            try upsert(blob: blob, account: account, synchronizable: false, dataProtection: true)
             if syncsToICloud {
-                try? insert(blob: blob, account: account, synchronizable: true, dataProtection: true)
+                try upsert(blob: blob, account: account, synchronizable: true, dataProtection: true)
+            } else {
+                // Toggle OFF: remove ONLY the iCloud-synced copy (precise
+                // match). The device-local copy stays as the durable anchor —
+                // iCloud sign-out deletes synced items out from under us.
+                try? remove(account: account, dataProtection: true, synchronizable: true)
             }
-            try? remove(account: account, dataProtection: false) // clear any stale legacy copy
         } catch KeychainError.missingEntitlement {
-            try remove(account: account, dataProtection: false)
-            try insert(blob: blob, account: account, synchronizable: false, dataProtection: false)
+            // Unsigned dev build: the DP keychain is unavailable; upsert into
+            // the legacy keychain instead (macOS dev tool only, in practice).
+            log.warning("save: DP keychain unavailable (missing entitlement) — upserting into LEGACY keychain")
+            try upsert(blob: blob, account: account, synchronizable: false, dataProtection: false)
             if syncsToICloud {
-                try? insert(blob: blob, account: account, synchronizable: true, dataProtection: false)
+                try upsert(blob: blob, account: account, synchronizable: true, dataProtection: false)
+            } else {
+                try? remove(account: account, dataProtection: false, synchronizable: true)
             }
         }
     }
 
     public func delete() throws {
-        try remove(account: account, dataProtection: true)
-        try remove(account: account, dataProtection: false)
+        log.info("delete: wiping owner key (both copies, precise match)")
+        try remove(account: account, dataProtection: true, synchronizable: false)
+        try remove(account: account, dataProtection: true, synchronizable: true)
+        #if os(macOS)
+        try remove(account: account, dataProtection: false, synchronizable: nil)
+        #endif
         #if targetEnvironment(simulator)
         if let url = simFileURL { try? FileManager.default.removeItem(at: url) }
         #endif
@@ -149,12 +192,28 @@ public final class KeychainOwnerIdentityStore: OwnerIdentityStore, @unchecked Se
 
     // MARK: - SecItem primitives
 
+    /// Human-readable OSStatus for logs (statuses only; never item data).
+    private func statusName(_ status: OSStatus) -> String {
+        switch status {
+        case errSecSuccess: return "errSecSuccess"
+        case errSecItemNotFound: return "errSecItemNotFound"
+        case errSecDuplicateItem: return "errSecDuplicateItem"
+        case errSecMissingEntitlement: return "errSecMissingEntitlement"
+        case errSecInteractionNotAllowed: return "errSecInteractionNotAllowed"
+        case -25293: return "errSecAuthNeeded" // macOS-only symbol; raw value for iOS builds
+        case errSecUserCanceled: return "errSecUserCanceled"
+        default: return "OSStatus(\(status))"
+        }
+    }
+
     private func read(account: String, dataProtection: Bool) throws -> Ed25519Identity? {
         var query = query(account: account, dataProtection: dataProtection)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
+        let msg = "read \(account)/\(dataProtection ? "dp" : "legacy") → \(statusName(status))"
+        log.info("\(msg, privacy: .public)")
         switch status {
         case errSecSuccess:
             guard let blob = item as? Data else { return nil }
@@ -166,24 +225,59 @@ public final class KeychainOwnerIdentityStore: OwnerIdentityStore, @unchecked Se
         }
     }
 
-    private func insert(blob: Data, account: String, synchronizable: Bool, dataProtection: Bool) throws {
-        var attributes = query(account: account, dataProtection: dataProtection)
-        attributes[kSecAttrSynchronizable as String] = synchronizable
-        attributes[kSecValueData as String] = blob
-        attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-        let status = SecItemAdd(attributes as CFDictionary, nil)
-        switch status {
-        case errSecSuccess, errSecDuplicateItem:
-            return
+    /// UPSERT (issue #2): SecItemUpdate in place, SecItemAdd when missing.
+    /// save() must never delete-then-add: the delete-then-add window erased
+    /// the just-written identity, and a crash mid-save could lose the key.
+    private func upsert(blob: Data, account: String, synchronizable: Bool, dataProtection: Bool) throws {
+        var matchQuery = query(account: account, dataProtection: dataProtection)
+        matchQuery[kSecAttrSynchronizable as String] = synchronizable
+        let update: [String: Any] = [
+            kSecValueData as String: blob,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
+        ]
+        let syncLabel = synchronizable ? "sync" : "nosync"
+        let storeLabel = dataProtection ? "dp" : "legacy"
+        let updateStatus = SecItemUpdate(matchQuery as CFDictionary, update as CFDictionary)
+        switch updateStatus {
+        case errSecSuccess:
+            let msg = "upsert \(account)/\(storeLabel)/\(syncLabel) → updated in place"
+            log.info("\(msg, privacy: .public)")
+        case errSecItemNotFound:
+            var addQuery = matchQuery
+            addQuery[kSecValueData as String] = blob
+            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+            let status = SecItemAdd(addQuery as CFDictionary, nil)
+            let msg = "upsert \(account)/\(storeLabel)/\(syncLabel) → added (\(statusName(status)))"
+            log.info("\(msg, privacy: .public)")
+            switch status {
+            case errSecSuccess, errSecDuplicateItem:
+                return
+            case errSecMissingEntitlement:
+                throw KeychainError.missingEntitlement
+            default:
+                throw KeychainError.unexpectedStatus(status)
+            }
         case errSecMissingEntitlement:
             throw KeychainError.missingEntitlement
         default:
-            throw KeychainError.unexpectedStatus(status)
+            throw KeychainError.unexpectedStatus(updateStatus)
         }
     }
 
-    private func remove(account: String, dataProtection: Bool) throws {
-        let status = SecItemDelete(query(account: account, dataProtection: dataProtection) as CFDictionary)
+    /// Precise remove: pass `synchronizable` to target exactly one item
+    /// variant, or nil for SynchronizableAny (full wipe of the slot).
+    private func remove(account: String, dataProtection: Bool, synchronizable: Bool?) throws {
+        var delQuery = query(account: account, dataProtection: dataProtection)
+        if let synchronizable {
+            delQuery[kSecAttrSynchronizable as String] = synchronizable
+        }
+        let status = SecItemDelete(delQuery as CFDictionary)
+        // NOTE (issue #2): on iOS `dataProtection: false` is NOT a separate
+        // legacy store — it hits the same (only) keychain. Logs make any
+        // steady-state remove visible in Console.
+        let syncLabel = synchronizable == nil ? "syncAny" : synchronizable! ? "sync" : "nosync"
+        let msg = "remove \(account)/\(dataProtection ? "dp" : "legacy") \(syncLabel) → \(statusName(status))"
+        log.info("\(msg, privacy: .public)")
         switch status {
         case errSecSuccess, errSecItemNotFound, errSecMissingEntitlement:
             return
